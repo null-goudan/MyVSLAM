@@ -5,15 +5,21 @@ using namespace std;
 const string strPathToSequence = "./dataset/image_00";
 const string settingFilePath = "./KITTI00-02.yaml";
 
-void LoadImages(const string &strSequence, vector<string> &vstrImageFilenames,
+const string strImagePath = "./dataset/Enoc/cam0";
+const string timefilePath = "./dataset/Enoc/data.csv";
+
+void LoadImages_kitti(const string &strSequence, vector<string> &vstrImageFilenames,
                 vector<double> &vTimestamps);
+
+void LoadImage_euroc(const string &strImagePath, const string &strPathTimes,
+                vector<string> &vstrImages, vector<double> &vTimeStamps);
 
 int main()
 {
     // 处理路径加载图像
     vector<string> vstrImageFilenames;
     vector<double> vTimestamps;
-    LoadImages(strPathToSequence, vstrImageFilenames, vTimestamps);
+    LoadImages_kitti(strPathToSequence, vstrImageFilenames, vTimestamps);
 
     int nImages = vstrImageFilenames.size();
 
@@ -51,7 +57,7 @@ int main()
     return 0;
 }
 
-void LoadImages(const string &strSequence, vector<string> &vstrImageFilenames,
+void LoadImages_kitti(const string &strSequence, vector<string> &vstrImageFilenames,
                 vector<double> &vTimestamps)
 {
     ifstream fTimes;
@@ -80,5 +86,29 @@ void LoadImages(const string &strSequence, vector<string> &vstrImageFilenames,
         ss << setfill('0') << setw(10) << i;
         vstrImageFilenames[i] = strPrefixLeft + ss.str() + ".png";
         // cout << vstrImageFilenames[i] << endl; // test;
+    }
+}
+
+void LoadImage_euroc(const string &strImagePath, const string &strPathTimes,
+                vector<string> &vstrImages, vector<double> &vTimeStamps)
+{
+    ifstream fTimes;
+    fTimes.open(strPathTimes.c_str());
+    vTimeStamps.reserve(5000);
+    vstrImages.reserve(5000);
+    while(!fTimes.eof())
+    {
+        string s;
+        getline(fTimes,s);
+        if(!s.empty())
+        {
+            stringstream ss;
+            ss << s;
+            vstrImages.push_back(strImagePath + "/" + ss.str() + ".png");
+            double t;
+            ss >> t;
+            vTimeStamps.push_back(t/1e9);
+
+        }
     }
 }

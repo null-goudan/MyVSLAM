@@ -147,6 +147,7 @@ namespace Goudan_SLAM
         // 1. 初始化
         if (mState == NOT_INITIALIZED)
         {
+            // cout << "Initialize ready." << endl;
             MonocularInitialization();
 
             if (mState != OK)
@@ -155,11 +156,12 @@ namespace Goudan_SLAM
         else
         {
             // 2. 跟踪 (此时已经初始化完毕)
-            bool bOK;
+            // bool bOK;
             // 正常VO模式
             // if(!mbOnlyTracking)
             if (mState == OK) // 正常初始化成功
             {
+                
             }
             else
             {
@@ -200,6 +202,8 @@ namespace Goudan_SLAM
             // 2. 如果当前帧特征点数大于100，则得到用于初始化的第二帧
             // 如果当前帧特征点太少，重新构造初始器
             // 因此只有连续两帧的特征点个数都大于100时, 才能继续进行初始化的过程
+
+            // cout<<"try Initialize"<<endl;
             if ((int)mCurrentFrame.mvKeys.size() <= 100)
             {
                 delete mpInitializer;
@@ -211,12 +215,14 @@ namespace Goudan_SLAM
             // 3. 在mInitialFrame 和 mCurrentFrame 找匹配的特征点对
             // mvbPrevMathed 为前一帧的特征点， 存储了mInitialFrame 中的那些点将进行接下来的匹配
             // mvIniMatches 存储 mInitialFrame, mCurrentFrame之间匹配的特征点
+            cout<<"Initialize matching.."<<endl;
             ORBmatcher matcher(0.9, true);
             int nmatches = matcher.SearchForInitialization(mInitialFrame, mCurrentFrame, mvbPrevMatched, mvIniMatches, 100);
 
             // 4.初始化两帧之间的匹配点太少，重新初始化
             if (nmatches < 100)
             {
+                cout << "matcher point is less than 100: num " << nmatches <<endl;
                 delete mpInitializer;
                 mpInitializer = static_cast<Initializer *>(NULL);
                 return;
@@ -226,6 +232,7 @@ namespace Goudan_SLAM
             cv::Mat tcw;                 // 现在相机的平移
             vector<bool> vbTriangulated; // Triangulated Correspondences (mvIniMatches)
 
+            cout<<"Initial compute F and H .. "<<endl;
             // 5. 通过F模型或者H模型进行单目初始化,得到两帧间相对运动、初始MapPoints
             if (mpInitializer->Initialize(mCurrentFrame, mvIniMatches, Rcw, tcw, mvIniP3D, vbTriangulated))
             {

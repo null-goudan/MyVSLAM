@@ -18,8 +18,10 @@ namespace Goudan_SLAM
 
     int ORBmatcher::SearchForInitialization(Frame &F1, Frame &F2, std::vector<cv::Point2f> &vbPrevMatched, std::vector<int> &vnMatches12, int windowSize)
     {
+        // cout << "matcher: F1 keypoints number :" << F1.mvKeysUn.size() << endl;
+        // cout << "matcher: F2 keypoints number :" << F2.mvKeysUn.size() << endl;
         int nmatches = 0;
-        vnMatches12 = vector<int>(F1.mvKeys.size() - 1);
+        vnMatches12 = vector<int>(F1.mvKeysUn.size() - 1);
 
         vector<int> rotHist[HISTO_LENGTH];
         for (int i = 0; i < HISTO_LENGTH; i++)
@@ -29,7 +31,7 @@ namespace Goudan_SLAM
         vector<int> vMatchedDistance(F2.mvKeysUn.size(), INT_MAX);
         vector<int> vnMatches21(F2.mvKeysUn.size(), -1);
 
-        for (size_t i1 = 0, iend1 = F1.mvKeysUn.size(); i1 < iend1; INT16_MAX)
+        for (size_t i1 = 0, iend1 = F1.mvKeysUn.size(); i1 < iend1; i1++)
         {
             cv::KeyPoint kp1 = F1.mvKeysUn[i1];
             int level1 = kp1.octave;

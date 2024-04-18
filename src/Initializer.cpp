@@ -20,6 +20,7 @@ namespace Goudan_SLAM
     bool Initializer::Initialize(const Frame &CurrentFrame, const vector<int> &vMatches12,
                                  cv::Mat &R21, cv::Mat &t21, vector<cv::Point3f> &vP3D, vector<bool> &vbTriangulated)
     {
+        std::cout << "Initializing..."<<endl;
         // Frame2 特征点
         mvKeys2 = CurrentFrame.mvKeysUn;
 
@@ -98,6 +99,7 @@ namespace Goudan_SLAM
         // 4. 计算得分比例，选取某个模型
         float RH = SH / (SH + SF);
 
+        std::cout<<"initialize success. reconstructing R and t ..." <<endl;
         // 5. 从H矩阵或者F矩阵中恢复R,t
         if (RH > 0.40)
             return ReconstructH(vbMatchesInliersH, H, mK, R21, t21, vP3D, vbTriangulated, 0, 50);
