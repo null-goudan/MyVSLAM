@@ -18,6 +18,44 @@ namespace Goudan_SLAM{
                     cv::Mat &R21, cv::Mat &t21, vector<cv::Point3f> &vP3D, vector<bool> &vbTriangulated);
 
     private:
+        // 假设场景为平面情况下通过前两帧求取Homography矩阵(current frame 2 到 reference frame 1),并得到该模型的评分
+        void FindHomography(vector<bool> &vbMatchesInliers, float &score, cv::Mat &H21);
+        // 假设场景为非平面情况下通过前两帧求取Fundamental矩阵(current frame 2 到 reference frame 1),并得到该模型的评分
+        void FindFundamental(vector<bool> &vbInliers, float &score, cv::Mat &F21);
+
+        // 具体计算Homography矩阵
+        cv::Mat ComputeH21(const vector<cv::Point2f> &vP1, const vector<cv::Point2f> &vP2);
+
+        // 具体计算Fundamental矩阵
+        cv::Mat ComputeF21(const vector<cv::Point2f> &vP1, const vector<cv::Point2f> &vP2);
+
+        // 具体计算假设使用Homography模型的得分
+        float CheckHomography(const cv::Mat &H21, const cv::Mat H12,vector<bool> vbMatchesInliners, float sigma);
+
+        // 具体计算假设使用Fundamental模型的得分
+        float CheckFundamental(const cv::Mat &F21, vector<bool> &bvMatcherInliners, float sigma);
+
+        // 分解F矩阵，并从分解后的多个解中找出合适的R，t
+        bool ReconstructF(vector<bool> &vbMatchesInliers, cv::Mat &F21, cv::Mat &K,
+                        cv::Mat &R21, cv::Mat &t21, vector<cv::Point3f> &vP3D, vector<bool> &vbTriangulated, float minParallax, int minTriangulated);
+
+        // 分解H矩阵，并从分解后的多个解中找出合适的R，t
+        bool ReconstructH(vector<bool> &vbMatchesInliers, cv::Mat &H21, cv::Mat &K,
+                        cv::Mat &R21, cv::Mat &t21, vector<cv::Point3f> &vP3D, vector<bool> &vbTriangulated, float minParallax, int minTriangulated);
+        
+        // F矩阵通过结合内参可以得到Essential矩阵，该函数用于分解E矩阵，将得到4组解
+        void DecomposeE(const cv::Mat &E, cv::Mat &R1, cv::Mat &R2, cv::Mat &t);
+        
+        // ReconstructF 调用该函数进行 cheirality check, 从而进一步找出F分解后最合适的解
+        int CheckRT(const cv::Mat &R, const cv::Mat &t,const vector<cv::KeyPoint> &vKeys1, const vector<cv::KeyPoint> &vKeys2,
+                       const vector<Match> &vMatches12, vector<bool> &vbInliers,
+                       const cv::Mat &K, vector<cv::Point3f> &vP3D, float th2, vector<bool> &vbGood, float &parallax);
+
+        // 归一化三维空间点和帧间位移t
+        void Normalize(const vector<cv::KeyPoint> &vKeys, vector<cv::Point2f> &vNormalizedPoints, cv::Mat &T);
+
+        // 通过三角化方法，利用反投影矩阵将特征点恢复为3D点
+        void Triangulate(const cv::KeyPoint &kp1, const cv::KeyPoint &kp2, const cv::Mat &P1, const cv::Mat &P2, cv::Mat &x3D);
 
         vector <cv::KeyPoint> mvKeys1;  ///< 存储Reference Frame中的特征点
         vector <cv::KeyPoint> mvKeys2;  ///< 存储Current Frame中的特征点
