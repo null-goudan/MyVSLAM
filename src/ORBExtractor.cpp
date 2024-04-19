@@ -355,7 +355,7 @@ namespace Goudan_SLAM
     ORBExtractor::ORBExtractor(int _nfeatures, float _scaleFactor, int _nlevels, int _iniThFAST, int _minThFAST)
         : nfeatures(_nfeatures), scaleFactor(_scaleFactor), nlevels(_nlevels), iniThFAST(_iniThFAST), minThFAST(_minThFAST)
     {
-        cout << "ORBExtractor constructor" << endl;
+        // cout << "ORBExtractor constructor" << endl;
         // 计算每一层相对于原始图片的放大倍数
         mvScaleFactor.resize(nlevels);
         mvLevelSigma2.resize(nlevels);
@@ -364,7 +364,7 @@ namespace Goudan_SLAM
         for (int i = 1; i < nlevels; ++i)
         {
             mvScaleFactor[i] = mvScaleFactor[i - 1] * scaleFactor;
-            cout << "Factor " << i - 1 << ":" << mvScaleFactor[i - 1];
+            // cout << "Factor " << i - 1 << ":" << mvScaleFactor[i - 1];
             mvLevelSigma2[i] = mvScaleFactor[i] * mvScaleFactor[i];
         }
 

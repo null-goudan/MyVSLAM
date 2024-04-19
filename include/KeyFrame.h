@@ -14,12 +14,13 @@ namespace Goudan_SLAM
     class Map;
     class MapPoint;
     class Frame;
-    class KeyFrameDatabase;
+    // class KeyFrameDatabase;
 
     class KeyFrame
     {
     public:
-        KeyFrame(Frame &F, Map *pMap, KeyFrameDatabase *pKFDB);
+        // KeyFrame(Frame &F, Map *pMap, KeyFrameDatabase *pKFDB);
+        KeyFrame(Frame &F, Map *pMap);
 
         // Pose functions
         void SetPose(const cv::Mat &Tcw);
@@ -115,7 +116,7 @@ namespace Goudan_SLAM
         const cv::Mat mK;
 
         // 以下变量需要通过锁进行线程安全
-    protected:
+    // protected:
         
     };
 

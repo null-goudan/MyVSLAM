@@ -31,9 +31,12 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
 
 add_library(${PROJECT_NAME} SHARED
 src/System.cpp
+src/Frame.cpp
+src/KeyFrame.cpp
+src/Map.cpp
+src/MapPoint.cpp
 src/Tracking.cpp
 src/ORBExtractor.cpp
-src/Frame.cpp
 src/Initializer.cpp
 src/ORBmatcher.cpp
 )

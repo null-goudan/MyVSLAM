@@ -253,10 +253,16 @@ namespace Goudan_SLAM
                 Rcw.copyTo(Tcw.rowRange(0, 3).colRange(0, 3));
                 tcw.copyTo(Tcw.rowRange(0, 3).col(3));
                 mCurrentFrame.SetPose(Tcw);
-                cout << "current Frame pose: "<<endl;
-                cout << Tcw <<endl;
-                mState = OK;
+                
+                // 将三角化得到的3D点包装秤MapPoints
+                // Initialize函数会得到mvIniP3D
+                CreateInitialMapMonocular();
             }
         }
     }
-}
+    
+    void Tracking::CreateInitialMapMonocular()
+    {
+        KeyFrame* pKFini = new KeyFrame(mInitialFrame, mpMap)
+    }
+}// namespace Goudan_SLAM
