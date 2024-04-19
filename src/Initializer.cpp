@@ -948,7 +948,7 @@ namespace Goudan_SLAM
             float im1x, im1y;
             float invZ1 = 1.0 / p3dC1.at<float>(2);
             im1x = fx * p3dC1.at<float>(0) * invZ1 + cx;
-            im1y = fy * p3dC2.at<float>(1) * invZ1 + cy;
+            im1y = fy * p3dC1.at<float>(1) * invZ1 + cy;
 
             float squareError1 = (im1x - kp1.pt.x) * (im1x - kp1.pt.x) + (im1y - kp1.pt.y) * (im1y - kp1.pt.y);
 

@@ -218,6 +218,7 @@ namespace Goudan_SLAM
             // cout<<"Initialize matching.."<<endl;
             ORBmatcher matcher(0.9, true);
             int nmatches = matcher.SearchForInitialization(mInitialFrame, mCurrentFrame, mvbPrevMatched, mvIniMatches, 100);
+            // cout << "inital matcher: num " << nmatches <<endl;
 
             // 4.初始化两帧之间的匹配点太少，重新初始化
             if (nmatches < 100)
