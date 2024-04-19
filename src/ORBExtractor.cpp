@@ -364,7 +364,7 @@ namespace Goudan_SLAM
         for (int i = 1; i < nlevels; ++i)
         {
             mvScaleFactor[i] = mvScaleFactor[i - 1] * scaleFactor;
-            cout << "Factor "<<i - 1 << ":"<<mvScaleFactor[i - 1];
+            cout << "Factor " << i - 1 << ":" << mvScaleFactor[i - 1];
             mvLevelSigma2[i] = mvScaleFactor[i] * mvScaleFactor[i];
         }
 
@@ -389,6 +389,7 @@ namespace Goudan_SLAM
             sumFeatures += mnFeaturesPerLevel[level];
             nDesiredFeaturesPerScale *= factor;
         }
+        mnFeaturesPerLevel[nlevels - 1] = std::max(nfeatures - sumFeatures, 0);
 
         // 复制 模式数组
         const int npoints = 512;
@@ -417,62 +418,69 @@ namespace Goudan_SLAM
             ++v0;
         }
     }
-    const float factorPI = ( float )( CV_PI / 180.f );
-    static void computeOrbDescriptor( const KeyPoint& kpt, const Mat& img, const Point* pattern, uchar* desc )
-	{
-		float angle = (float)kpt.angle * factorPI;
-		float a = (float)cos(angle), b = (float)sin(angle);
+    const float factorPI = (float)(CV_PI / 180.f);
+    static void computeOrbDescriptor(const KeyPoint &kpt, const Mat &img, const Point *pattern, uchar *desc)
+    {
+        float angle = (float)kpt.angle * factorPI;
+        float a = (float)cos(angle), b = (float)sin(angle);
 
-		const uchar* center = &img.at<uchar>( cvRound( kpt.pt.y ), cvRound( kpt.pt.x ) );
-		const int step = (int)img.step;
+        const uchar *center = &img.at<uchar>(cvRound(kpt.pt.y), cvRound(kpt.pt.x));
+        const int step = (int)img.step;
 
-		#define GET_VALUE( idx ) \
-			center[ cvRound( pattern[idx].x*b + pattern[idx].y*a ) * step + \
-					cvRound( pattern[idx].x*a - pattern[idx].y*b ) ];
+#define GET_VALUE(idx)                                               \
+    center[cvRound(pattern[idx].x * b + pattern[idx].y * a) * step + \
+           cvRound(pattern[idx].x * a - pattern[idx].y * b)]
 
-		for ( int i = 0; i < 32; ++i, pattern += 16 )
-		{
-			int t0, t1, val;
-			t0 = GET_VALUE(0); t1 = GET_VALUE(1);
-			val = t0 < t1;
-			t0 = GET_VALUE(2); t1 = GET_VALUE(3);
-			val |= (t0 < t1) << 1;
-			t0 = GET_VALUE(4); t1 = GET_VALUE(5);
-			val |= (t0 < t1) << 2;
-			t0 = GET_VALUE(6); t1 = GET_VALUE(7);
-			val |= (t0 < t1) << 3;
-			t0 = GET_VALUE(8); t1 = GET_VALUE(9);
-			val |= (t0 < t1) << 4;
-			t0 = GET_VALUE(10); t1 = GET_VALUE(11);
-			val |= (t0 < t1) << 5;
-			t0 = GET_VALUE(12); t1 = GET_VALUE(13);
-			val |= (t0 < t1) << 6;
-			t0 = GET_VALUE(14); t1 = GET_VALUE(15);
-			val |= (t0 < t1) << 7;
+        for (int i = 0; i < 32; ++i, pattern += 16)
+        {
+            int t0, t1, val;
+            t0 = GET_VALUE(0);
+            t1 = GET_VALUE(1);
+            val = t0 < t1;
+            t0 = GET_VALUE(2);
+            t1 = GET_VALUE(3);
+            val |= (t0 < t1) << 1;
+            t0 = GET_VALUE(4);
+            t1 = GET_VALUE(5);
+            val |= (t0 < t1) << 2;
+            t0 = GET_VALUE(6);
+            t1 = GET_VALUE(7);
+            val |= (t0 < t1) << 3;
+            t0 = GET_VALUE(8);
+            t1 = GET_VALUE(9);
+            val |= (t0 < t1) << 4;
+            t0 = GET_VALUE(10);
+            t1 = GET_VALUE(11);
+            val |= (t0 < t1) << 5;
+            t0 = GET_VALUE(12);
+            t1 = GET_VALUE(13);
+            val |= (t0 < t1) << 6;
+            t0 = GET_VALUE(14);
+            t1 = GET_VALUE(15);
+            val |= (t0 < t1) << 7;
 
-			desc[i] = (uchar)val;
-		}
+            desc[i] = (uchar)val;
+        }
 
-		#undef GET_VALUE
-	}
+#undef GET_VALUE
+    }
 
-	static void computeDescriptors( const Mat& image, vector< KeyPoint >& keypoints, Mat& descriptors,
-		const vector< Point >& pattern )
-	{
-		descriptors = Mat::zeros( (int)keypoints.size(), 32, CV_8UC1 );
+    static void computeDescriptors(const Mat &image, vector<KeyPoint> &keypoints, Mat &descriptors,
+                                   const vector<Point> &pattern)
+    {
+        descriptors = Mat::zeros((int)keypoints.size(), 32, CV_8UC1);
 
-		for ( size_t i = 0; i < keypoints.size(); ++i )
-		{
-			computeOrbDescriptor( keypoints[i], image, &pattern[0], descriptors.ptr((int)i) );
-		}
-	}
-
+        for (size_t i = 0; i < keypoints.size(); ++i)
+        {
+            computeOrbDescriptor(keypoints[i], image, &pattern[0], descriptors.ptr((int)i));
+        }
+    }
 
     // 接口 提取 均匀的 ORB特征点
     void ORBExtractor::operator()(cv::InputArray _image, cv::InputArray _mask,
                                   std::vector<cv::KeyPoint> &_keypoints, cv::OutputArray _desciptors)
     {
-        cout << "ORBextractor operator!" << endl;
+        // cout << "ORBextractor operator!" << endl;
         if (_image.empty())
             return;
 
@@ -506,24 +514,25 @@ namespace Goudan_SLAM
         {
             vector<KeyPoint> &keypoints = allKeypoints[level];
             int nkeypointsLevel = (int)keypoints.size();
-            if(nkeypointsLevel == 0) continue;
-            // 预处理 
+            if (nkeypointsLevel == 0)
+                continue;
+            // 预处理
             Mat workingMat = mvImagePyramid[level].clone();
-            GaussianBlur(workingMat, workingMat, Size(7,7), 2, 2,BORDER_REFLECT_101);
+            GaussianBlur(workingMat, workingMat, Size(7, 7), 2, 2, BORDER_REFLECT_101);
             // 计算描述子
             Mat desc = desciptors.rowRange(offset, offset + nkeypointsLevel);
-            computeDescriptors( workingMat, keypoints, desc, pattern);
+            computeDescriptors(workingMat, keypoints, desc, pattern);
 
             offset += nkeypointsLevel;
 
             // scale keypoint coordinates
-			if ( level != 0 )
-			{
-				float scale = mvScaleFactor[ level ];
-				for( vector< KeyPoint >::iterator keypoint = keypoints.begin(), keypointEnd = keypoints.end();
-					keypoint != keypointEnd; ++keypoint )
-					keypoint->pt *= scale;
-			}
+            if (level != 0)
+            {
+                float scale = mvScaleFactor[level];
+                for (vector<KeyPoint>::iterator keypoint = keypoints.begin(), keypointEnd = keypoints.end();
+                     keypoint != keypointEnd; ++keypoint)
+                    keypoint->pt *= scale;
+            }
 
             // 插入到输出
             _keypoints.insert(_keypoints.end(), keypoints.begin(), keypoints.end());
@@ -533,20 +542,28 @@ namespace Goudan_SLAM
     // 直接使用resize进行构建金字塔
     void ORBExtractor::ComputePyramid(cv::Mat image)
     {
-        // cv::imshow("ComputePyramid", image);
         for (int level = 0; level < nlevels; ++level)
         {
             float scale = mvInvScaleFactor[level];
+            // 金字塔该层图像大小
             Size sz(cvRound((float)image.cols * scale), cvRound((float)image.rows * scale));
+            // 包含边界后的图像大小
+            Size wholeSize(sz.width + EDGE_THRESHOLD * 2, sz.height + EDGE_THRESHOLD * 2);
+            Mat temp(wholeSize, image.type()), masktemp;
+            mvImagePyramid[level] = temp(Rect(EDGE_THRESHOLD, EDGE_THRESHOLD, sz.width, sz.height));
+
             // Compute the resized image
             if (level != 0)
             {
-                resize(mvImagePyramid[level - 1], mvImagePyramid[level], sz, 0, 0, INTER_LINEAR);
+                resize(mvImagePyramid[level - 1], mvImagePyramid[level], sz, 0, 0, cv::INTER_LINEAR);
+
+                copyMakeBorder(mvImagePyramid[level], temp, EDGE_THRESHOLD, EDGE_THRESHOLD, EDGE_THRESHOLD, EDGE_THRESHOLD,
+                               BORDER_REFLECT_101 + BORDER_ISOLATED);
             }
             else
             {
-                // 此函数将图像转化为更大的图像，并用BORDER_REFLECT_101的方式来处理边缘图像
-                mvImagePyramid[level] = image;
+                copyMakeBorder(image, temp, EDGE_THRESHOLD, EDGE_THRESHOLD, EDGE_THRESHOLD, EDGE_THRESHOLD,
+                               BORDER_REFLECT_101);
             }
         }
     }
@@ -593,11 +610,13 @@ namespace Goudan_SLAM
                     if (maxX > maxBorderX)
                         maxX = maxBorderX;
                     vector<cv::KeyPoint> vKeyCell;
-                    FAST(mvImagePyramid[level].rowRange(iniY, maxY).colRange(iniX, maxX), vKeyCell, iniThFAST, true);
+                    FAST(mvImagePyramid[level].rowRange(iniY, maxY).colRange(iniX, maxX),
+                         vKeyCell, iniThFAST, true);
                     // 如果检测为空就降低阈值再进行检测
                     if (vKeyCell.empty())
                     {
-                        FAST(mvImagePyramid[level].rowRange(iniY, maxY).colRange(iniX, maxX), vKeyCell, minThFAST, true);
+                        FAST(mvImagePyramid[level].rowRange(iniY, maxY).colRange(iniX, maxX),
+                             vKeyCell, minThFAST, true);
                     }
                     // 如果检测不为空就将检测到的特征点放到vToDistributeKeys中
                     if (!vKeyCell.empty())
@@ -639,27 +658,27 @@ namespace Goudan_SLAM
     static float IC_Angle(const Mat &image, Point2f pt, const vector<int> &u_max)
     {
         int m_01 = 0, m_10 = 0;
+
         const uchar *center = &image.at<uchar>(cvRound(pt.y), cvRound(pt.x));
 
-        // 中心水平线计算
+        // Treat the center line differently, v=0
         for (int u = -HALF_PATCH_SIZE; u <= HALF_PATCH_SIZE; ++u)
-        {
             m_10 += u * center[u];
-        }
 
-        //
+        // Go line by line in the circuI853lar patch
         int step = (int)image.step1();
         for (int v = 1; v <= HALF_PATCH_SIZE; ++v)
         {
+            // Proceed over the two lines
             int v_sum = 0;
             int d = u_max[v];
             for (int u = -d; u <= d; ++u)
             {
                 int val_plus = center[u + v * step], val_minus = center[u - v * step];
-                v_sum += (val_plus - val_minus);    // 计算上下的时候是有符号的，所以这边是减
-                m_10 += u * (val_plus + val_minus); // 将(u,v)和(u,-v)两个点的像素一起计算   这边加是由于u已经确定好了符号
+                v_sum += (val_plus - val_minus);
+                m_10 += u * (val_plus + val_minus);
             }
-            m_01 += v * v_sum; // 将x=v这条直线上所有的坐标点的像素值求和在进行计算
+            m_01 += v * v_sum;
         }
 
         return fastAtan2((float)m_01, (float)m_10);

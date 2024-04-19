@@ -18,10 +18,10 @@ namespace Goudan_SLAM
 
     int ORBmatcher::SearchForInitialization(Frame &F1, Frame &F2, std::vector<cv::Point2f> &vbPrevMatched, std::vector<int> &vnMatches12, int windowSize)
     {
-        // cout << "matcher: F1 keypoints number :" << F1.mvKeysUn.size() << endl;
-        // cout << "matcher: F2 keypoints number :" << F2.mvKeysUn.size() << endl;
+        cout << "matcher: F1 keypoints number :" << F1.mvKeysUn.size() << endl;
+        cout << "matcher: F2 keypoints number :" << F2.mvKeysUn.size() << endl;
         int nmatches = 0;
-        vnMatches12 = vector<int>(F1.mvKeysUn.size() - 1);
+        vnMatches12 = vector<int>(F1.mvKeysUn.size(), - 1);
 
         vector<int> rotHist[HISTO_LENGTH];
         for (int i = 0; i < HISTO_LENGTH; i++)
@@ -68,7 +68,7 @@ namespace Goudan_SLAM
                 }
                 else if (dist < bestDist2)
                 {
-                    bestDist = dist;
+                    bestDist2 = dist;
                 }
             }
             // 根据阈值和角度投票剔除误匹配

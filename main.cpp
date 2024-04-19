@@ -2,7 +2,7 @@
 
 using namespace std;
 
-const string strPathToSequence = "./dataset/image_00";
+const string strPathToSequence = "./dataset/00";
 const string settingFilePath = "./KITTI00-02.yaml";
 
 const string strImagePath = "./dataset/Enoc/cam0";
@@ -14,12 +14,14 @@ void LoadImages_kitti(const string &strSequence, vector<string> &vstrImageFilena
 void LoadImage_euroc(const string &strImagePath, const string &strPathTimes,
                 vector<string> &vstrImages, vector<double> &vTimeStamps);
 
+void LoadImages(const string &strPathToSequence, vector<string> &vstrImageFilenames, vector<double> &vTimestamps);
+
 int main()
 {
     // 处理路径加载图像
     vector<string> vstrImageFilenames;
     vector<double> vTimestamps;
-    LoadImages_kitti(strPathToSequence, vstrImageFilenames, vTimestamps);
+    LoadImages(strPathToSequence, vstrImageFilenames, vTimestamps);
 
     int nImages = vstrImageFilenames.size();
 
@@ -110,5 +112,37 @@ void LoadImage_euroc(const string &strImagePath, const string &strPathTimes,
             vTimeStamps.push_back(t/1e9);
 
         }
+    }
+}
+
+void LoadImages(const string &strPathToSequence, vector<string> &vstrImageFilenames, vector<double> &vTimestamps)
+{
+    ifstream fTimes;
+    string strPathTimeFile = strPathToSequence + "/times.txt";
+    fTimes.open(strPathTimeFile.c_str());
+    while(!fTimes.eof())
+    {
+        string s;
+        getline(fTimes,s);
+        if(!s.empty())
+        {
+            stringstream ss;
+            ss << s;
+            double t;
+            ss >> t;
+            vTimestamps.push_back(t);
+        }
+    }
+
+    string strPrefixLeft = strPathToSequence + "/image_0/";
+
+    const int nTimes = vTimestamps.size();
+    vstrImageFilenames.resize(nTimes);
+
+    for(int i=0; i<nTimes; i++)
+    {
+        stringstream ss;
+        ss << setfill('0') << setw(6) << i;
+        vstrImageFilenames[i] = strPrefixLeft + ss.str() + ".png";
     }
 }

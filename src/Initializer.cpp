@@ -101,11 +101,14 @@ namespace Goudan_SLAM
 
         std::cout<<"initialize success. reconstructing R and t ..." <<endl;
         // 5. 从H矩阵或者F矩阵中恢复R,t
-        if (RH > 0.40)
+        if (RH > 0.40){
+            cout << "select Homography model" <<endl;
             return ReconstructH(vbMatchesInliersH, H, mK, R21, t21, vP3D, vbTriangulated, 0, 50);
-        else
+        }
+        else{
+            cout << "select Fundamanetal model" <<endl;
             return ReconstructF(vbMatchesInliersF, F, mK, R21, t21, vP3D, vbTriangulated, 0, 50);
-
+        }
         return false;
     }
 
@@ -740,17 +743,20 @@ namespace Goudan_SLAM
             if (vbMatchesInliers[i])
                 N++;
 
+        cout << "Compute Essencial Matrix from Fundamental.." <<endl;
         // 通过Fundamental矩阵计算Esencial矩阵
         cv::Mat E21 = K.t() * F21 * K;
 
         cv::Mat R1, R2, t;
 
+        cout << "Decompose essencial matrix .."<<endl;
         // 通过分解得到四个模型然后筛选
         DecomposeE(E21, R1, R2, t);
 
         cv::Mat t1 = t;
         cv::Mat t2 = -t;
 
+        cout << "reconstruct with the 4 hyphoteses and check .."<<endl;
         // Reconstruct with the 4 hyphoteses and check
         vector<cv::Point3f> vP3D1, vP3D2, vP3D3, vP3D4;
         vector<bool> vbTriangulated1, vbTriangulated2, vbTriangulated3, vbTriangulated4;
@@ -846,7 +852,7 @@ namespace Goudan_SLAM
     void Initializer::DecomposeE(const cv::Mat &E, cv::Mat &R1, cv::Mat &R2, cv::Mat &t)
     {
         cv::Mat u, w, vt;
-        cv::SVD::compute(E, w, t, vt);
+        cv::SVD::compute(E, w, u, vt);
 
         u.col(2).copyTo(t);
         t = t / cv::norm(t);
@@ -864,6 +870,7 @@ namespace Goudan_SLAM
         if (cv::determinant(R2) < 0)
             R2 = -R2;
     }
+
     // 进行cheirality check，从而进一步找出F分解后最合适的解
     int Initializer::CheckRT(const cv::Mat &R, const cv::Mat &t, const vector<cv::KeyPoint> &vKeys1, const vector<cv::KeyPoint> &vKeys2,
                              const vector<Match> &vMatches12, vector<bool> &vbMatchesInlies,

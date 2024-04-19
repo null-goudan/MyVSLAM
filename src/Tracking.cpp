@@ -215,7 +215,7 @@ namespace Goudan_SLAM
             // 3. 在mInitialFrame 和 mCurrentFrame 找匹配的特征点对
             // mvbPrevMathed 为前一帧的特征点， 存储了mInitialFrame 中的那些点将进行接下来的匹配
             // mvIniMatches 存储 mInitialFrame, mCurrentFrame之间匹配的特征点
-            cout<<"Initialize matching.."<<endl;
+            // cout<<"Initialize matching.."<<endl;
             ORBmatcher matcher(0.9, true);
             int nmatches = matcher.SearchForInitialization(mInitialFrame, mCurrentFrame, mvbPrevMatched, mvIniMatches, 100);
 
@@ -232,10 +232,10 @@ namespace Goudan_SLAM
             cv::Mat tcw;                 // 现在相机的平移
             vector<bool> vbTriangulated; // Triangulated Correspondences (mvIniMatches)
 
-            cout<<"Initial compute F and H .. "<<endl;
             // 5. 通过F模型或者H模型进行单目初始化,得到两帧间相对运动、初始MapPoints
             if (mpInitializer->Initialize(mCurrentFrame, mvIniMatches, Rcw, tcw, mvIniP3D, vbTriangulated))
             {
+                cout<<"initial finished"<<endl;
                 // 6.删除那些无法进行三角化的匹配点
                 for (size_t i = 0, iend = mvIniMatches.size(); i < iend; i++)
                 {
@@ -244,15 +244,17 @@ namespace Goudan_SLAM
                         mvIniMatches[i] = 1;
                         nmatches--;
                     }
-
-                    // 将初始化的第一帧作为世界坐标系, 因此第一帧变换矩阵为单位矩阵
-                    mInitialFrame.SetPose(cv::Mat::eye(4, 4, CV_32F));
-                    // 有Rcw和tcw构造Tcw，并赋值给mTcw, mTcw为世界坐标系到该帧的变换矩阵
-                    cv::Mat Tcw = cv::Mat::eye(4, 4, CV_32F);
-                    Rcw.copyTo(Tcw.rowRange(0, 3).colRange(0, 3));
-                    tcw.copyTo(Tcw.rowRange(0, 3).col(3));
-                    mCurrentFrame.SetPose(Tcw);
                 }
+                // 将初始化的第一帧作为世界坐标系, 因此第一帧变换矩阵为单位矩阵
+                mInitialFrame.SetPose(cv::Mat::eye(4, 4, CV_32F));
+                // 有Rcw和tcw构造Tcw，并赋值给mTcw, mTcw为世界坐标系到该帧的变换矩阵
+                cv::Mat Tcw = cv::Mat::eye(4, 4, CV_32F);
+                Rcw.copyTo(Tcw.rowRange(0, 3).colRange(0, 3));
+                tcw.copyTo(Tcw.rowRange(0, 3).col(3));
+                mCurrentFrame.SetPose(Tcw);
+                cout << "current Frame pose: "<<endl;
+                cout << Tcw <<endl;
+                mState = OK;
             }
         }
     }
