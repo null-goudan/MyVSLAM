@@ -4,10 +4,18 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/features2d/features2d.hpp>
 
-#include "System.h"
-#include "ORBExtractor.h"
+#include "Viewer.h"
+#include "FrameDrawer.h"
+#include "MapDrawer.h"
+#include "Map.h"
 #include "Frame.h"
+#include "ORBmatcher.h"
+#include "ORBExtractor.h"
+#include "ORBVocabulary.h"
+#include "KeyFrameDatabase.h"
 #include "Initializer.h"
+#include "MapDrawer.h"
+#include "System.h"
 
 #include <mutex>
 
@@ -16,9 +24,12 @@ namespace Goudan_SLAM{
     
     class Tracking{
     public:
-        Tracking(System* pSys, const std::string &strSettingPath);
+        Tracking(System *pSys, ORBVocabulary* pVoc , FrameDrawer* pFrameDrawer, MapDrawer* pMapDrawer, Map* pMap,  
+            KeyFrameDatabase *pKFDB, const std::string &strSettingPath);
+        
         cv::Mat GrabImageMonocular(const cv::Mat &im, const double &timestamp);
 
+        void SetViewer(Viewer* pViewer);
         // member
     public:
         enum eTrackingState{
@@ -60,6 +71,8 @@ namespace Goudan_SLAM{
         ORBExtractor* mpIniORBextractor;
 
         // Bow
+        ORBVocabulary* mpORBVocabulary;
+        KeyFrameDatabase* mpKeyFrameDB;
 
         // 初始化器
         Initializer* mpInitializer;
@@ -73,6 +86,9 @@ namespace Goudan_SLAM{
         System* mpSystem;
 
         // Drawers
+        Viewer* mpViewer;
+        FrameDrawer* mpFrameDrawer;
+        MapDrawer* mpMapDrawer;
 
         // Map
         Map* mpMap;

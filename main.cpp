@@ -25,7 +25,7 @@ int main()
 
     int nImages = vstrImageFilenames.size();
 
-    Goudan_SLAM::System SLAM(settingFilePath);
+    Goudan_SLAM::System SLAM("./ORBVoc.txt", strPathToSequence);
 
     // 统计时间的Vector
     vector<float> vTimesTrack;

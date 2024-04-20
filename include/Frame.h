@@ -1,31 +1,35 @@
 #ifndef FRAME_H
 #define FRAME_H
 
-#include <vector>
 #include "MapPoint.h"
+#include "Thirdparty/DBoW2/DBoW2/BowVector.h"
+#include "Thirdparty/DBoW2/DBoW2/FeatureVector.h"
+#include "ORBVocabulary.h"
 #include "KeyFrame.h"
 #include "ORBExtractor.h"
+
 #include <opencv2/opencv.hpp>
 
 using namespace std;
 
 namespace Goudan_SLAM
 {
-#define FRAME_GRID_ROWS 48
-#define FRAME_GRID_COLS 64
-class MapPoint;
-class KeyFrame;
+    #define FRAME_GRID_ROWS 48
+    #define FRAME_GRID_COLS 64
+    class MapPoint;
+    class KeyFrame;
 
     class Frame
     {
     public:
         Frame();
         Frame(const Frame &frame);
-        Frame(const cv::Mat &imGray, const double &timeStamp, ORBExtractor *extractor, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth);
+        Frame(const cv::Mat &imGray, const double &timeStamp, ORBExtractor *extractor, ORBVocabulary* voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth);
 
+        // 提取的关键点存放在mvKeys和mDescriptors中 ORB是直接调orbExtractor提取的
         void ExtractORB(const cv::Mat &im);
-        // 计算Bag of words特征
-        void ComputeBow();
+        // 计算Bag of words特征并存放在mBowVec中
+        void ComputeBoW();
         // 设置相机姿态(用Tcw 更新 mTcw)
         void SetPose(cv::Mat Tcw);
         // 计算旋转，平移和相机中心矩阵
@@ -50,7 +54,7 @@ class KeyFrame;
 
     public:
         // Vocabulary used for relocalization.
-        // ORBVocabulary* mpORBvocabulary;
+        ORBVocabulary* mpORBvocabulary;
 
         // 特征提取器
         ORBExtractor *mpORBextractorLeft;
@@ -68,6 +72,11 @@ class KeyFrame;
         static float invfy;
         cv::Mat mDistCoef;
 
+        float mb;   // baseline
+        float mbf;  // baseline multiplied by fx
+
+        float mThDepth;
+
         // KeyPoints 数量
         int N;
 
@@ -81,12 +90,9 @@ class KeyFrame;
         std::vector<cv::KeyPoint> mvKeysUn;
 
         // Bag of Words Vector structures.
-        // DBoW2::BowVector mBowVec;
-        // DBoW2::FeatureVector mFeatVec;
+        DBoW2::BowVector mBowVec;
+        DBoW2::FeatureVector mFeatVec;
 
-
-        float mb;   // baseline
-        float mbf;  // baseline multiplied by fx
 
         // ORB descriptor, each row associated to a keypoint.
         // 左目摄像头和右目摄像头特征点对应的描述子

@@ -27,6 +27,9 @@ namespace Goudan_SLAM
         // cv::Mat GetNormal();
         KeyFrame* GetReferenceKeyFrame();
 
+        // void SetBadFlag();
+        // bool isBad();
+
     public:
         long unsigned int mnId;
         static long unsigned int nNextId;
@@ -44,6 +47,10 @@ namespace Goudan_SLAM
         KeyFrame* mpRefKF;      // 引用此点的关键帧
 
         Map* mpMap;
+
+        // Bad flag (we do not currently erase MapPoint from memory)
+        bool mbBad;
+        // MapPoint* mpReplaced;
 
         std::mutex mMutexPos;
         std::mutex mMutexFeatures;

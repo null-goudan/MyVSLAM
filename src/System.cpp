@@ -4,15 +4,9 @@
 #include <iostream>
 #include <iomanip>
 
-bool has_suffix(const std::string &str, const std::string &suffix)
-{
-    std::size_t index = str.find(suffix, str.size() - suffix.size());
-    return (index != std::string::npos);
-}
-
 namespace Goudan_SLAM
 {
-    System::System(const string &strSettingsFile)
+    System::System(const string &strVocFile, const string &strSettingsFile)
     {
         cout << endl
              << "Goudan-SLAM(a Monocular SLAM)" << endl
@@ -28,19 +22,33 @@ namespace Goudan_SLAM
         }
 
         // 加载 ORB vocabulary
-        // :TODO
+        cout << endl
+             << "Loading ORB Vocabulary(Powered by ORB-SLAM org). This could take while..." << endl;
+
+        mpVocabulary = new ORBVocabulary();
+        bool bVocLoad = false;
+        bVocLoad = mpVocabulary->loadFromTextFile(strVocFile);
+        if (!bVocLoad)
+        {
+            cerr << "Wrong path to vocabulary. " << endl;
+            cerr << "Failed to open at: " << strVocFile << endl;
+            exit(-1);
+        }
+        cout << "Vocabulary loaded!" << endl << endl;
 
         // 创建关键帧数据库(KeyFrame Database)，记录关键帧
-        // :TODO
+        mpKeyFrameDatabase = new KeyFrameDatabase(*mpVocabulary);
 
         // 创建空地图
-        // mpMap = new Map();
+        mpMap = new Map();
 
         // 创建绘图窗口(Drawers)，一般用于Viewer
-        // :TODO
+        mpFrameDrawer = new FrameDrawer(mpMap);
+        mpMapDrawer = new MapDrawer(mpMap, strSettingsFile);
 
         // 初始化 Tracking 线程
-        mpTracker = new Tracking(this, strSettingsFile);
+        mpTracker = new Tracking(this, mpVocabulary, mpFrameDrawer, mpMapDrawer,
+                             mpMap, mpKeyFrameDatabase, strSettingsFile);
 
         // 初始化局部优化(局部地图) (Local Mapping) 线程并启动
         // :TODO
@@ -49,13 +57,14 @@ namespace Goudan_SLAM
         // :TODO
 
         // 初始化Viewer线程并启动
-        // :TODO
-
+        mpViewer = new Viewer(this, mpFrameDrawer, mpMapDrawer, mpTracker, strSettingsFile);
+        mptViewer = new thread(&Viewer::Run, mpViewer);
         // 设置一些必要的指针给对象
-
+        mpTracker->SetViewer(mpViewer);
     }
 
-    cv::Mat System::TrackMonocular(const cv::Mat &im, const double &timestamp){
+    cv::Mat System::TrackMonocular(const cv::Mat &im, const double &timestamp)
+    {
         {
             // 检查模式变化
             // :TODO

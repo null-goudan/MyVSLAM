@@ -14,7 +14,10 @@ using namespace std;
 
 namespace Goudan_SLAM
 {
-    Tracking::Tracking(System *pSys, const std::string &strSettingPath)
+        Tracking::Tracking(System *pSys, ORBVocabulary* pVoc , FrameDrawer* pFrameDrawer, MapDrawer* pMapDrawer, Map* pMap,   KeyFrameDatabase *pKFDB,const std::string &strSettingPath)
+        :mState(NO_IMAGES_YET), mpInitializer(static_cast<Initializer*>(NULL)), mpORBVocabulary(pVoc), mpViewer(NULL),
+        mpKeyFrameDB(pKFDB), mpSystem(pSys),
+        mpFrameDrawer(pFrameDrawer), mpMapDrawer(pMapDrawer), mpMap(pMap)
     {
         cv::FileStorage fSettings(strSettingPath, cv::FileStorage::READ);
         float fx = fSettings["Camera.fx"];
@@ -123,9 +126,9 @@ namespace Goudan_SLAM
 
         // 构造Frame
         if (mState == NOT_INITIALIZED || mState == NO_IMAGES_YET)
-            mCurrentFrame = Frame(mImGray, timestamp, mpIniORBextractor, mK, mDistCoef, mbf, mThDepth);
+            mCurrentFrame = Frame(mImGray, timestamp, mpIniORBextractor,  mpORBVocabulary, mK, mDistCoef, mbf, mThDepth);
         else
-            mCurrentFrame = Frame(mImGray, timestamp, mpORBextractorLeft, mK, mDistCoef, mbf, mThDepth);
+            mCurrentFrame = Frame(mImGray, timestamp, mpORBextractorLeft, mpORBVocabulary, mK, mDistCoef, mbf, mThDepth);
 
         // 追踪线程 (Tracking)
         Track();
@@ -144,11 +147,15 @@ namespace Goudan_SLAM
         // mLastProcessedState存储了Tracking最新的状态，用于FrameDrawer中的绘制
         mLastProcessedState = mState;
 
+        unique_lock<mutex> lock(mpMap->mMutexMapUpdate);
+
         // 1. 初始化
         if (mState == NOT_INITIALIZED)
         {
             // cout << "Initialize ready." << endl;
             MonocularInitialization();
+
+            mpFrameDrawer->Update(this);
 
             if (mState != OK)
                 return;
@@ -263,6 +270,24 @@ namespace Goudan_SLAM
     
     void Tracking::CreateInitialMapMonocular()
     {
-        KeyFrame* pKFini = new KeyFrame(mInitialFrame, mpMap)
+        KeyFrame* pKFini = new KeyFrame(mInitialFrame, mpMap, mpKeyFrameDB);
+        KeyFrame* pKFcur = new KeyFrame(mCurrentFrame, mpMap, mpKeyFrameDB);
+
+        // :将关键帧的描述子转为Bow
+        pKFini->ComputeBoW();
+        pKFcur->ComputeBoW();
+
+        // 关键帧插入地图
+        mpMap->AddKeyFrame(pKFini);
+        mpMap->AddKeyFrame(pKFcur);
+
+        // 将3D点包装秤MapPoint
+        for(size_t i = 0;i< mvIniMatches.size(); i++){
+
+        }
+    }
+
+    void Tracking::SetViewer(Viewer* pViewer){
+        mpViewer=pViewer;
     }
 }// namespace Goudan_SLAM

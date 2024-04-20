@@ -19,6 +19,7 @@ endif( CMAKE_BUILD_TYPE MATCHES "Debug" )
 
 find_package(OpenCV 3.2.0 REQUIRED)
 find_package(Eigen3 REQUIRED)
+find_package(Pangolin REQUIRED)
 
 include_directories(
 ${PROJECT_SOURCE_DIR}
@@ -39,6 +40,11 @@ src/Tracking.cpp
 src/ORBExtractor.cpp
 src/Initializer.cpp
 src/ORBmatcher.cpp
+src/FrameDrawer.cpp
+src/MapDrawer.cpp
+src/Viewer.cpp
+src/KeyFrameDatabase.cpp
+src/Converter.cpp
 )
 
 target_link_libraries(${PROJECT_NAME}
