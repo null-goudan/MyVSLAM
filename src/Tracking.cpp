@@ -14,10 +14,10 @@ using namespace std;
 
 namespace Goudan_SLAM
 {
-        Tracking::Tracking(System *pSys, ORBVocabulary* pVoc , FrameDrawer* pFrameDrawer, MapDrawer* pMapDrawer, Map* pMap,   KeyFrameDatabase *pKFDB,const std::string &strSettingPath)
-        :mState(NO_IMAGES_YET), mpInitializer(static_cast<Initializer*>(NULL)), mpORBVocabulary(pVoc), mpViewer(NULL),
-        mpKeyFrameDB(pKFDB), mpSystem(pSys),
-        mpFrameDrawer(pFrameDrawer), mpMapDrawer(pMapDrawer), mpMap(pMap)
+    Tracking::Tracking(System *pSys, ORBVocabulary *pVoc, FrameDrawer *pFrameDrawer, MapDrawer *pMapDrawer, Map *pMap, KeyFrameDatabase *pKFDB, const std::string &strSettingPath)
+        : mState(NO_IMAGES_YET), mpInitializer(static_cast<Initializer *>(NULL)), mpORBVocabulary(pVoc), mpViewer(NULL),
+          mpKeyFrameDB(pKFDB), mpSystem(pSys),
+          mpFrameDrawer(pFrameDrawer), mpMapDrawer(pMapDrawer), mpMap(pMap)
     {
         cv::FileStorage fSettings(strSettingPath, cv::FileStorage::READ);
         float fx = fSettings["Camera.fx"];
@@ -126,7 +126,7 @@ namespace Goudan_SLAM
 
         // 构造Frame
         if (mState == NOT_INITIALIZED || mState == NO_IMAGES_YET)
-            mCurrentFrame = Frame(mImGray, timestamp, mpIniORBextractor,  mpORBVocabulary, mK, mDistCoef, mbf, mThDepth);
+            mCurrentFrame = Frame(mImGray, timestamp, mpIniORBextractor, mpORBVocabulary, mK, mDistCoef, mbf, mThDepth);
         else
             mCurrentFrame = Frame(mImGray, timestamp, mpORBextractorLeft, mpORBVocabulary, mK, mDistCoef, mbf, mThDepth);
 
@@ -168,7 +168,6 @@ namespace Goudan_SLAM
             // if(!mbOnlyTracking)
             if (mState == OK) // 正常初始化成功
             {
-                
             }
             else
             {
@@ -230,7 +229,7 @@ namespace Goudan_SLAM
             // 4.初始化两帧之间的匹配点太少，重新初始化
             if (nmatches < 100)
             {
-                cout << "matcher point is less than 100: num " << nmatches <<endl;
+                cout << "matcher point is less than 100: num " << nmatches << endl;
                 delete mpInitializer;
                 mpInitializer = static_cast<Initializer *>(NULL);
                 return;
@@ -243,7 +242,7 @@ namespace Goudan_SLAM
             // 5. 通过F模型或者H模型进行单目初始化,得到两帧间相对运动、初始MapPoints
             if (mpInitializer->Initialize(mCurrentFrame, mvIniMatches, Rcw, tcw, mvIniP3D, vbTriangulated))
             {
-                cout<<"initial finished"<<endl;
+                cout << "initial finished" << endl;
                 // 6.删除那些无法进行三角化的匹配点
                 for (size_t i = 0, iend = mvIniMatches.size(); i < iend; i++)
                 {
@@ -260,18 +259,18 @@ namespace Goudan_SLAM
                 Rcw.copyTo(Tcw.rowRange(0, 3).colRange(0, 3));
                 tcw.copyTo(Tcw.rowRange(0, 3).col(3));
                 mCurrentFrame.SetPose(Tcw);
-                
+
                 // 将三角化得到的3D点包装秤MapPoints
                 // Initialize函数会得到mvIniP3D
                 CreateInitialMapMonocular();
             }
         }
     }
-    
+
     void Tracking::CreateInitialMapMonocular()
     {
-        KeyFrame* pKFini = new KeyFrame(mInitialFrame, mpMap, mpKeyFrameDB);
-        KeyFrame* pKFcur = new KeyFrame(mCurrentFrame, mpMap, mpKeyFrameDB);
+        KeyFrame *pKFini = new KeyFrame(mInitialFrame, mpMap, mpKeyFrameDB);
+        KeyFrame *pKFcur = new KeyFrame(mCurrentFrame, mpMap, mpKeyFrameDB);
 
         // :将关键帧的描述子转为Bow
         pKFini->ComputeBoW();
@@ -281,13 +280,70 @@ namespace Goudan_SLAM
         mpMap->AddKeyFrame(pKFini);
         mpMap->AddKeyFrame(pKFcur);
 
-        // 将3D点包装秤MapPoint
-        for(size_t i = 0;i< mvIniMatches.size(); i++){
+        // 将3D点包装成MapPoint并添加至MapPoint
+        for (size_t i = 0; i < mvIniMatches.size(); i++)
+        {
+            if (mvIniMatches[i] < 0)
+                continue;
 
+            // 创建 MapPoint
+            cv::Mat worldPos(mvIniP3D[i]);
+            MapPoint *pMP = new MapPoint(worldPos, pKFcur, mpMap);
+
+            // 为MapPoint添加属性: 1. 观测到该点的关键帧 2. 该点的描述子 3. 该点的平均观测方向和深度范围
+            // 表示该KeyFrame的哪个特征点可以观测到哪个3D点
+            pKFini->AddMapPoint(pMP, i);
+            pKFcur->AddMapPoint(pMP, mvIniMatches[i]);
+
+            // a. 观测
+            pMP->AddObservation(pKFini, i);
+            pMP->AddObservation(pKFcur, mvIniMatches[i]);
+
+            // b 从众多观测到该点的特征点中挑选区分度最高的描述子
+            // pMP->ComputeDistinctiveDescriptors();
+            // c 更新该点的平均观测方向以及观测距离的范围
+            // pMP->UpdateNormalAndDepth();
+
+            // Fill Current Frame structure
+            mCurrentFrame.mvpMapPoints[mvIniMatches[i]] = pMP;
+            mCurrentFrame.mvbOutlier[mvIniMatches[i]] = false;
+
+            // 地图中添加该MapPoint
+            mpMap->AddMapPoint(pMP);
         }
+
+        // 更新帧间链接关系
+        // :TODO
+
+        // BA优化
+        // :TODO
+
+        // 将MapPoints中值深度归一化到1，并归一化两帧之间变换
+        // :TODO
+
+        //
+        cv::Mat Tc2w = pKFcur->GetPose();
+
+        mCurrentFrame.SetPose(pKFcur->GetPose());
+        mnLastKeyFrameId = mCurrentFrame.mnId;
+        mpLastKeyFrame = pKFcur;
+
+        mpReferenceKF = pKFcur;
+        mCurrentFrame.mpReferenceKF = pKFcur;
+
+        // mLastFrame = Frame(mCurrentFrame); // 重定位用的上一帧信息
+
+        mpMap->SetReferenceMapPoints(mvpLocalMapPoints);
+
+        mpMapDrawer->SetCurrentCameraPose(pKFcur->GetPose());
+
+        mpMap->mvpKeyFrameOrigins.push_back(pKFini);
+
+        mState = OK;
     }
 
-    void Tracking::SetViewer(Viewer* pViewer){
-        mpViewer=pViewer;
+    void Tracking::SetViewer(Viewer *pViewer)
+    {
+        mpViewer = pViewer;
     }
-}// namespace Goudan_SLAM
+} // namespace Goudan_SLAM

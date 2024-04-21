@@ -13,6 +13,7 @@ namespace Goudan_SLAM
              << "designed by Goudan[Yang Yixiang].Zheng Zhou University of Light Industry." << endl
              << endl;
 
+        // cout << "Setting File Path: "<< strSettingsFile<<endl;
         // Check settings file
         cv::FileStorage fsSettings(strSettingsFile.c_str(), cv::FileStorage::READ);
         if (!fsSettings.isOpened())

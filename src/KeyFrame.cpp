@@ -103,4 +103,19 @@ namespace Goudan_SLAM
         }
     }
 
+    void KeyFrame::SetBadFlag()
+    {
+        {
+            unique_lock<mutex> lock(mMutexConnections);
+            if(mnID == 0)
+                return;
+            else if(mbNotErase)     //表示不该擦除该KeyFrame
+            {
+                mbToBeErased = true;
+                return;
+            }
+        }
+        
+    }
+
 } // namespace Goudan_SLAM

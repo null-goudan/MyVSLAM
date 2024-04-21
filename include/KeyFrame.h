@@ -141,7 +141,7 @@ namespace Goudan_SLAM
         // 和Frame类中的定义相同
         const std::vector<cv::KeyPoint> mvKeys;
         const std::vector<cv::KeyPoint> mvKeysUn;
-        const std::vector<float> mvuRight; // negative value for monocular points
+        // const std::vector<float> mvuRight; // negative value for monocular points
         const std::vector<float> mvDepth; // negative value for monocular points
         const cv::Mat mDescriptors;
 
