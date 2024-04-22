@@ -65,6 +65,8 @@ namespace Goudan_SLAM{
         void MonocularInitialization();
         void CreateInitialMapMonocular();
 
+        bool TrackReferenceKeyFrame();
+
         bool mbVO;
 
         ORBExtractor* mpORBextractorLeft;

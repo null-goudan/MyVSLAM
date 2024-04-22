@@ -55,6 +55,12 @@ namespace Goudan_SLAM
         nObs++;
     }
 
+    int MapPoint::Observations()
+    {
+        unique_lock<mutex> lock(mMutexFeatures);
+        return nObs;
+    }
+
     void MapPoint::EraseObservation(KeyFrame *pKF)
     {
         bool bBad = false;

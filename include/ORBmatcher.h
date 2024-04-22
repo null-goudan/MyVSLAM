@@ -16,7 +16,8 @@ namespace Goudan_SLAM{
         static int DescriptorDistance (const cv::Mat& a, const cv::Mat& b);
 
         int SearchForInitialization(Frame &F1, Frame& F2, std::vector<cv::Point2f> &vbPrevMatched, std::vector<int> &vnMatches12, int windowSize=10);
-    
+        int SearchByBoW(KeyFrame* pKF,Frame &F, vector<MapPoint*> &vpMapPointMatches);
+
     public:
         static const int TH_LOW;
         static const int TH_HIGH;

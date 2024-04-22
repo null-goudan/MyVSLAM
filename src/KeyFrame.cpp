@@ -107,15 +107,87 @@ namespace Goudan_SLAM
     {
         {
             unique_lock<mutex> lock(mMutexConnections);
-            if(mnID == 0)
+            if (mnID == 0)
                 return;
-            else if(mbNotErase)     //表示不该擦除该KeyFrame
+            else if (mbNotErase) // 表示不该擦除该KeyFrame
             {
                 mbToBeErased = true;
                 return;
             }
         }
-        
+    }
+
+    /**
+     * @brief 关键帧中，大于等于minObs的MapPoints的数量
+     * minObs就是一个阈值，大于minObs就表示该MapPoint是一个高质量的MapPoint
+     * 一个高质量的MapPoint会被多个KeyFrame观测到，
+     * @param  minObs 最小观测
+     */
+    int KeyFrame::TrackedMapPoints(const int &minObs)
+    {
+        unique_lock<mutex> lock(mMutexFeatures);
+
+        int nPoints = 0;
+        const bool bCheckObs = minObs > 0;
+        for (int i = 0; i < N; i++)
+        {
+            MapPoint *pMP = mvpMapPoints[i];
+            if (pMP)
+            {
+                if (!pMP->isBad())
+                {
+                    if (bCheckObs)
+                    {
+                        // 该MapPoint是一个高质量的MapPoint
+                        if (mvpMapPoints[i]->Observations() >= minObs)
+                            nPoints++;
+                    }
+                    else
+                        nPoints++;
+                }
+            }
+        }
+
+        return nPoints;
+    }
+    
+    vector<MapPoint*> KeyFrame::GetMapPointMatches()
+    {
+        unique_lock<mutex> lock(mMutexFeatures);
+        return mvpMapPoints;
+    }
+
+    // 评估当前关键帧场景深度，q=2表示中值
+    float KeyFrame::ComputeSceneMedianDepth(const int q)
+    {
+        vector<MapPoint *> vpMapPoints;
+        cv::Mat Tcw_;
+        {
+            unique_lock<mutex> lock(mMutexFeatures);
+            unique_lock<mutex> lock2(mMutexPose);
+            vpMapPoints = mvpMapPoints;
+            Tcw_ = Tcw.clone();
+        }
+
+        vector<float> vDepths;
+        vDepths.reserve(N);
+        cv::Mat Rcw2 = Tcw_.row(2).colRange(0, 3);
+        Rcw2 = Rcw2.t();
+        float zcw = Tcw_.at<float>(2, 3);
+        for (int i = 0; i < N; i++)
+        {
+            if (mvpMapPoints[i])
+            {
+                MapPoint *pMP = mvpMapPoints[i];
+                cv::Mat x3Dw = pMP->GetWorldPos();
+                float z = Rcw2.dot(x3Dw) + zcw; // (R*x3Dw+t)的第三行，即z
+                vDepths.push_back(z);
+            }
+        }
+
+        sort(vDepths.begin(), vDepths.end());
+
+        return vDepths[(vDepths.size() - 1) / q];
     }
 
 } // namespace Goudan_SLAM

@@ -162,12 +162,23 @@ namespace Goudan_SLAM
         }
         else
         {
+            // bOK为临时变量，用于表示每个函数是否执行成功
+            bool bOK;
             // 2. 跟踪 (此时已经初始化完毕)
             // bool bOK;
             // 正常VO模式
             // if(!mbOnlyTracking)
             if (mState == OK) // 正常初始化成功
             {
+                // 检查并更新上一帧被替换的MapPoints :TODO
+
+                // 2.1 跟踪上一帧或者参考帧或者重定位
+                // 运动模型是空的或刚完成重定位  (重定位未做)  :TODO
+                // 只要mVelocity不为空就选择TrackWithMotionModel
+                if(mVelocity.empty()){
+                    bOK = TrackReferenceKeyFrame();
+                }
+
             }
             else
             {
@@ -242,7 +253,7 @@ namespace Goudan_SLAM
             // 5. 通过F模型或者H模型进行单目初始化,得到两帧间相对运动、初始MapPoints
             if (mpInitializer->Initialize(mCurrentFrame, mvIniMatches, Rcw, tcw, mvIniP3D, vbTriangulated))
             {
-                cout << "initial finished" << endl;
+                // cout << "initial finished" << endl;
                 // 6.删除那些无法进行三角化的匹配点
                 for (size_t i = 0, iend = mvIniMatches.size(); i < iend; i++)
                 {
@@ -319,10 +330,35 @@ namespace Goudan_SLAM
         // :TODO
 
         // 将MapPoints中值深度归一化到1，并归一化两帧之间变换
-        // :TODO
+        // 单目传感器无法恢复真实的深度，这里将点云中值深度（欧式距离，不是指z）归一化到1
+        // 评估关键帧场景深度，q=2表示中值
+        float medianDepth = pKFini->ComputeSceneMedianDepth(2);
+        float invMedianDepth = 1.0f/medianDepth;
 
-        //
+        if(medianDepth<0 || pKFcur->TrackedMapPoints(1)<100)
+        {
+            cout << "Wrong initialization, reseting..." << endl;
+            // Reset();
+            return;
+        }
+
+        // Scale initial baseline
         cv::Mat Tc2w = pKFcur->GetPose();
+        // 根据点云归一化比例缩放平移量
+        Tc2w.col(3).rowRange(0,3) = Tc2w.col(3).rowRange(0,3)*invMedianDepth;
+        pKFcur->SetPose(Tc2w);
+
+        // Scale points
+        // 把3D点的尺度也归一化到1
+        vector<MapPoint*> vpAllMapPoints = pKFini->GetMapPointMatches();
+        for(size_t iMP=0; iMP<vpAllMapPoints.size(); iMP++)
+        {
+            if(vpAllMapPoints[iMP])
+            {
+                MapPoint* pMP = vpAllMapPoints[iMP];
+                pMP->SetWorldPos(pMP->GetWorldPos()*invMedianDepth);
+            }
+        }
 
         mCurrentFrame.SetPose(pKFcur->GetPose());
         mnLastKeyFrameId = mCurrentFrame.mnId;
@@ -331,6 +367,7 @@ namespace Goudan_SLAM
         mpReferenceKF = pKFcur;
         mCurrentFrame.mpReferenceKF = pKFcur;
 
+        
         // mLastFrame = Frame(mCurrentFrame); // 重定位用的上一帧信息
 
         mpMap->SetReferenceMapPoints(mvpLocalMapPoints);
@@ -340,6 +377,19 @@ namespace Goudan_SLAM
         mpMap->mvpKeyFrameOrigins.push_back(pKFini);
 
         mState = OK;
+        cout << "Initial mode Finished!!!!!"<<endl;
+    }
+
+    bool Tracking::TrackReferenceKeyFrame()
+    {
+        // 1. 将当前帧的描述子转化为BoW向量
+        mCurrentFrame.ComputeBoW();
+
+        ORBmatcher matcher(0.7, true);
+        vector<MapPoint*> vpMapPointMatches;
+
+        // 2. 通过特征点的Bow加快当前帧和参考帧之间的特征点匹配
+        int nmatches; //
     }
 
     void Tracking::SetViewer(Viewer *pViewer)

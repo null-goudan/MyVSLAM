@@ -21,7 +21,7 @@ namespace Goudan_SLAM
         cout << "matcher: F1 keypoints number :" << F1.mvKeysUn.size() << endl;
         cout << "matcher: F2 keypoints number :" << F2.mvKeysUn.size() << endl;
         int nmatches = 0;
-        vnMatches12 = vector<int>(F1.mvKeysUn.size(), - 1);
+        vnMatches12 = vector<int>(F1.mvKeysUn.size(), -1);
 
         vector<int> rotHist[HISTO_LENGTH];
         for (int i = 0; i < HISTO_LENGTH; i++)
@@ -134,6 +134,124 @@ namespace Goudan_SLAM
                 vbPrevMatched[i1] = F2.mvKeysUn[vnMatches12[i1]].pt;
 
         return nmatches;
+    }
+
+    int ORBmatcher::SearchByBoW(KeyFrame *pKF, Frame &F, vector<MapPoint *> &vpMapPointMatches)
+    {
+        const vector<MapPoint *> vpMapPointsKF = pKF->GetMapPointMatches();
+
+        vpMapPointMatches = vector<MapPoint *>(F.N, static_cast<MapPoint *>(NULL));
+
+        const DBoW2::FeatureVector &vFeatVecKF = pKF->mFeatVec;
+
+        int nmatches = 0;
+
+        vector<int> rotHist[HISTO_LENGTH];
+        for (int i = 0; i < HISTO_LENGTH; i++)
+            rotHist[i].reserve(500);
+
+        const float factor = HISTO_LENGTH / 360.0f;
+
+        // 将属于同一节点（特定层）的ORB特征进行匹配
+        DBoW2::FeatureVector::const_iterator KFit = vFeatVecKF.begin();
+        DBoW2::FeatureVector::const_iterator Fit = F.mFeatVec.begin();
+        DBoW2::FeatureVector::const_iterator KFend = vFeatVecKF.end();
+        DBoW2::FeatureVector::const_iterator Fend = F.mFeatVec.end();
+
+        while (KFit != KFend && Fit != Fend) // 使用二分查找(利用BoW的特点, 迅速找到其匹配的特征值)
+        {
+            if (KFit->first == Fit->first) // 取出属于同一个node的ORB特征点
+            {
+                const vector<unsigned int> vIndicesKF = KFit->second;
+                const vector<unsigned int> vIndicesF = Fit->second;
+
+                // 遍历KF中的属于该node的特征点
+                for (size_t iKF = 0; iKF < vIndicesF.size(); iKF++)
+                {
+                    const unsigned int realIdxKF = vIndicesKF[iKF];
+
+                    MapPoint *pMP = vpMapPointsKF[realIdxKF]; // 取出KF中该特征对应的MapPoint
+
+                    if (!pMP)
+                        continue;
+
+                    if (pMP->isBad())
+                        continue;
+
+                    const cv::Mat &dKF = pKF->mDescriptors.row(realIdxKF);
+
+                    int bestDist1 = 256; // 最好的距离 最小距离
+                    int bestIdxF = -1;
+                    int bestDist2 = 256; // 倒数第二好距离
+
+                    // 遍历F中属于该node的特征点， 找到最佳匹配点
+                    for (size_t iF = 0; iF < vIndicesF.size(); iF++)
+                    {
+                        const unsigned int realIdxF = vIndicesF[iF];
+
+                        if (vpMapPointMatches[realIdxF]) // 表示已经匹配过了
+                            continue;
+
+                        const cv::Mat &dF = F.mDescriptors.row(realIdxF);
+
+                        const int dist = DescriptorDistance(dKF, dF);
+
+                        if (dist < bestDist1)
+                        {
+                            bestDist2 = bestDist1;
+                            bestDist1 = dist;
+                            bestIdxF = realIdxF;
+                        }
+                        else if (dist < bestDist2)
+                        {
+                            bestDist2 = dist;
+                        }
+                    } // for
+
+                    // 根据阈值 和 角度投票剔除误匹配
+                    if (bestDist1 <= TH_LOW) // 匹配距离（误差）小于阈值
+                    {
+                        // trick!
+                        // 最佳匹配比次佳匹配明显要好，那么最佳匹配才真正靠谱
+                        if (static_cast<float>(bestDist1) < mfNNratio * static_cast<float>(bestDist2))
+                        {
+                            // 步骤5：更新特征点的MapPoint
+                            vpMapPointMatches[bestIdxF] = pMP;
+
+                            const cv::KeyPoint &kp = pKF->mvKeysUn[realIdxKF];
+
+                            if (mbCheckOrientation)
+                            {
+                                // trick!
+                                // angle：每个特征点在提取描述子时的旋转主方向角度，如果图像旋转了，这个角度将发生改变
+                                // 所有的特征点的角度变化应该是一致的，通过直方图统计得到最准确的角度变化值
+                                float rot = kp.angle - F.mvKeys[bestIdxF].angle; // 该特征点的角度变化值
+                                if (rot < 0.0)
+                                    rot += 360.0f;
+                                int bin = round(rot * factor); // 将rot分配到bin组
+                                if (bin == HISTO_LENGTH)
+                                    bin = 0;
+                                assert(bin >= 0 && bin < HISTO_LENGTH);
+                                rotHist[bin].push_back(bestIdxF);
+                            }
+                            nmatches++;
+                        }
+                    }
+    
+                }
+
+                KFit++;
+                Fit++;
+            }
+            else if (KFit->first < Fit->first)
+            {
+                KFit = vFeatVecKF.lower_bound(Fit->first);
+            }
+            else
+            {
+                Fit = vFeatVecKF.lower_bound(KFit->first);
+            }
+        } // while
     }
 
     // 取出直方图中最大的三个index
