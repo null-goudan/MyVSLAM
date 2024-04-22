@@ -138,8 +138,10 @@ namespace Goudan_SLAM
 
     int ORBmatcher::SearchByBoW(KeyFrame *pKF, Frame &F, vector<MapPoint *> &vpMapPointMatches)
     {
+        cout << "Start SearchByBow.." << endl;
+        
         const vector<MapPoint *> vpMapPointsKF = pKF->GetMapPointMatches();
-
+        cout << "Reference KeyFrame MapPoint Num: " << vpMapPointsKF.size() << endl;
         vpMapPointMatches = vector<MapPoint *>(F.N, static_cast<MapPoint *>(NULL));
 
         const DBoW2::FeatureVector &vFeatVecKF = pKF->mFeatVec;
@@ -189,20 +191,20 @@ namespace Goudan_SLAM
                     {
                         const unsigned int realIdxF = vIndicesF[iF];
 
-                        if (vpMapPointMatches[realIdxF]) // 表示已经匹配过了
+                        if (vpMapPointMatches[realIdxF]) // 表明这个点已经被匹配过了，不再匹配，加快速度
                             continue;
 
-                        const cv::Mat &dF = F.mDescriptors.row(realIdxF);
+                        const cv::Mat &dF = F.mDescriptors.row(realIdxF); // 取出F中该特征对应的描述子
 
-                        const int dist = DescriptorDistance(dKF, dF);
+                        const int dist = DescriptorDistance(dKF, dF); // 求描述子的距离
 
-                        if (dist < bestDist1)
+                        if (dist < bestDist1) // dist < bestDist1 < bestDist2，更新bestDist1 bestDist2
                         {
                             bestDist2 = bestDist1;
                             bestDist1 = dist;
                             bestIdxF = realIdxF;
                         }
-                        else if (dist < bestDist2)
+                        else if (dist < bestDist2) // bestDist1 < dist < bestDist2，更新bestDist2
                         {
                             bestDist2 = dist;
                         }
@@ -237,7 +239,6 @@ namespace Goudan_SLAM
                             nmatches++;
                         }
                     }
-    
                 }
 
                 KFit++;
@@ -252,6 +253,33 @@ namespace Goudan_SLAM
                 Fit = vFeatVecKF.lower_bound(KFit->first);
             }
         } // while
+
+        // 根据方向剔除误匹配的点
+        if (mbCheckOrientation)
+        {
+            int ind1 = -1;
+            int ind2 = -1;
+            int ind3 = -1;
+
+            // 计算rotHist中最大的三个的index
+            ComputeThreeMaxima(rotHist, HISTO_LENGTH, ind1, ind2, ind3);
+
+            for (int i = 0; i < HISTO_LENGTH; i++)
+            {
+                // 如果特征点的旋转角度变化量属于这三个组，则保留
+                if (i == ind1 || i == ind2 || i == ind3)
+                    continue;
+
+                // 将除了ind1 ind2 ind3以外的匹配点去掉
+                for (size_t j = 0, jend = rotHist[i].size(); j < jend; j++)
+                {
+                    vpMapPointMatches[rotHist[i][j]] = static_cast<MapPoint *>(NULL);
+                    nmatches--;
+                }
+            }
+        }
+        cout << "End SearchByBow: nmathes: " << nmatches << endl;
+        return nmatches;
     }
 
     // 取出直方图中最大的三个index

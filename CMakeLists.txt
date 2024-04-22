@@ -45,6 +45,7 @@ src/MapDrawer.cpp
 src/Viewer.cpp
 src/KeyFrameDatabase.cpp
 src/Converter.cpp
+src/Optimizer.cpp
 )
 
 target_link_libraries(${PROJECT_NAME}

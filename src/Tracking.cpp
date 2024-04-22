@@ -4,6 +4,7 @@
 
 #include "Frame.h"
 #include "ORBmatcher.h"
+#include "Optimizer.h"
 #include "Map.h"
 
 #include <iostream>
@@ -175,13 +176,25 @@ namespace Goudan_SLAM
                 // 2.1 跟踪上一帧或者参考帧或者重定位
                 // 运动模型是空的或刚完成重定位  (重定位未做)  :TODO
                 // 只要mVelocity不为空就选择TrackWithMotionModel
-                if(mVelocity.empty()){
+                if (mVelocity.empty())
+                {
                     bOK = TrackReferenceKeyFrame();
+                    if (bOK)
+                    {
+                        cout << "Track with no Velocity model successfully!" << endl;
+                        cout << "Now Camera Pose:" << endl
+                             << mCurrentFrame.mTcw << endl;
+                    }
                 }
-
             }
             else
             {
+                // 根据恒速模型设定当前帧的位姿
+                // 通过投影的方式在参考帧中找当前帧的匹配点
+                // 优化每个特征点所对应的3D点的投影误差即可得到位姿
+                bOK = TrackWithMotionModel();
+                if (!bOK)
+                    bOK = TrackReferenceKeyFrame();
             }
             // 只定位模式 :TODO
             // else
@@ -198,7 +211,7 @@ namespace Goudan_SLAM
                 // 1. 得到用于初始化的第一帧, 初始化需要两帧
                 mInitialFrame = Frame(mCurrentFrame);
                 // 记录最近的一帧
-                mLastFrames = Frame(mCurrentFrame);
+                mLastFrame = Frame(mCurrentFrame);
                 // mvbPrevMatched最大的情况就是所有的特征点都被追踪上
                 mvbPrevMatched.resize(mCurrentFrame.mvKeysUn.size());
                 for (size_t i = 0; i < mCurrentFrame.mvKeysUn.size(); i++)
@@ -333,11 +346,15 @@ namespace Goudan_SLAM
         // 单目传感器无法恢复真实的深度，这里将点云中值深度（欧式距离，不是指z）归一化到1
         // 评估关键帧场景深度，q=2表示中值
         float medianDepth = pKFini->ComputeSceneMedianDepth(2);
-        float invMedianDepth = 1.0f/medianDepth;
+        float invMedianDepth = 1.0f / medianDepth;
 
-        if(medianDepth<0 || pKFcur->TrackedMapPoints(1)<100)
+        if (medianDepth < 0 || pKFcur->TrackedMapPoints(1) < 100)
         {
             cout << "Wrong initialization, reseting..." << endl;
+            if (medianDepth < 0)
+                cout << "reason : medianDepth < 0" << endl;
+            else
+                cout << "reason : pKFcur->TrackedMapPoints(1) < 100 " << endl;
             // Reset();
             return;
         }
@@ -345,18 +362,18 @@ namespace Goudan_SLAM
         // Scale initial baseline
         cv::Mat Tc2w = pKFcur->GetPose();
         // 根据点云归一化比例缩放平移量
-        Tc2w.col(3).rowRange(0,3) = Tc2w.col(3).rowRange(0,3)*invMedianDepth;
+        Tc2w.col(3).rowRange(0, 3) = Tc2w.col(3).rowRange(0, 3) * invMedianDepth;
         pKFcur->SetPose(Tc2w);
 
         // Scale points
         // 把3D点的尺度也归一化到1
-        vector<MapPoint*> vpAllMapPoints = pKFini->GetMapPointMatches();
-        for(size_t iMP=0; iMP<vpAllMapPoints.size(); iMP++)
+        vector<MapPoint *> vpAllMapPoints = pKFini->GetMapPointMatches();
+        for (size_t iMP = 0; iMP < vpAllMapPoints.size(); iMP++)
         {
-            if(vpAllMapPoints[iMP])
+            if (vpAllMapPoints[iMP])
             {
-                MapPoint* pMP = vpAllMapPoints[iMP];
-                pMP->SetWorldPos(pMP->GetWorldPos()*invMedianDepth);
+                MapPoint *pMP = vpAllMapPoints[iMP];
+                pMP->SetWorldPos(pMP->GetWorldPos() * invMedianDepth);
             }
         }
 
@@ -367,8 +384,7 @@ namespace Goudan_SLAM
         mpReferenceKF = pKFcur;
         mCurrentFrame.mpReferenceKF = pKFcur;
 
-        
-        // mLastFrame = Frame(mCurrentFrame); // 重定位用的上一帧信息
+        mLastFrame = Frame(mCurrentFrame); // 重定位用的上一帧信息
 
         mpMap->SetReferenceMapPoints(mvpLocalMapPoints);
 
@@ -377,7 +393,7 @@ namespace Goudan_SLAM
         mpMap->mvpKeyFrameOrigins.push_back(pKFini);
 
         mState = OK;
-        cout << "Initial mode Finished!!!!!"<<endl;
+        cout << "Initial mode Finished!!!!!" << endl;
     }
 
     bool Tracking::TrackReferenceKeyFrame()
@@ -386,12 +402,51 @@ namespace Goudan_SLAM
         mCurrentFrame.ComputeBoW();
 
         ORBmatcher matcher(0.7, true);
-        vector<MapPoint*> vpMapPointMatches;
+        vector<MapPoint *> vpMapPointMatches; // 存放匹配上的3D点（初始化得到的点范围中的）
 
-        // 2. 通过特征点的Bow加快当前帧和参考帧之间的特征点匹配
-        int nmatches; //
+        // 2. 通过特征点的Bow加快当前帧和参考帧之间的特征点匹配(通过初始化已经有的一定的3D点,得到这些3D点对应的下一帧的对应的特征点)
+        int nmatches = matcher.SearchByBoW(mpReferenceKF, mCurrentFrame, vpMapPointMatches);
+
+        if (nmatches < 15)
+        {
+            cout << "nmatches less than 15" << endl;
+            return false;
+        }
+
+        // 将上一帧的位姿作为当前帧位姿的初始值
+        mCurrentFrame.mvpMapPoints = vpMapPointMatches;
+        mCurrentFrame.SetPose(mLastFrame.mTcw);
+
+        // 通过优化3D-2D的重投影误差来获得位姿
+        Optimizer::PoseOptimization(&mCurrentFrame);
+
+        // 剔除优化后的outliner匹配点
+        int nmatchesMap = 0;
+        for (int i = 0; i < mCurrentFrame.N; i++)
+        {
+            // cout << mCurrentFrame.mvpMapPoints[i] << endl;
+            if (mCurrentFrame.mvpMapPoints[i])
+            {
+                if (mCurrentFrame.mvbOutlier[i])
+                {
+                    MapPoint *pMP = mCurrentFrame.mvpMapPoints[i];
+
+                    mCurrentFrame.mvpMapPoints[i] = static_cast<MapPoint *>(NULL);
+                    mCurrentFrame.mvbOutlier[i] = false;
+                    // pMP->mbTrackInView = false;
+                    // pMP->mnLastFrameSeen = mCurrentFrame.mnId;
+                    nmatches--;
+                }
+                else if (mCurrentFrame.mvpMapPoints[i]->Observations() > 0)
+                    nmatchesMap++;
+            }
+        }
+        return nmatchesMap >= 0;
     }
 
+    bool Tracking::TrackWithMotionModel()
+    {
+    }
     void Tracking::SetViewer(Viewer *pViewer)
     {
         mpViewer = pViewer;

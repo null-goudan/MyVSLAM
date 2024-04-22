@@ -66,6 +66,7 @@ namespace Goudan_SLAM{
         void CreateInitialMapMonocular();
 
         bool TrackReferenceKeyFrame();
+        bool TrackWithMotionModel();
 
         bool mbVO;
 
@@ -112,7 +113,7 @@ namespace Goudan_SLAM{
 
         // Last Frame, KeyFream and Reloaclisation Info
         KeyFrame* mpLastKeyFrame;
-        Frame mLastFrames;
+        Frame mLastFrame;
         unsigned int mnLastKeyFrameId;
         unsigned int mnLastRelocFrameId;
 
