@@ -58,8 +58,11 @@ namespace Goudan_SLAM
         // :TODO
 
         // 初始化Viewer线程并启动
+        // cout << "Init Viewer" <<endl;
         mpViewer = new Viewer(this, mpFrameDrawer, mpMapDrawer, mpTracker, strSettingsFile);
+        //cout <<"Viewer Start................................"<<endl;
         mptViewer = new thread(&Viewer::Run, mpViewer);
+        // cout <<"Viewer Running.............................." <<endl;
         // 设置一些必要的指针给对象
         mpTracker->SetViewer(mpViewer);
     }

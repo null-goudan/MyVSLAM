@@ -43,7 +43,7 @@ namespace Goudan_SLAM
         glEnable(GL_BLEND);
         // 选择混合选项
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
+        // cout << "[Viewer] Create Buttons -----" <<endl;
         // 新建按钮和选择框，第一个参数为按钮的名字，第二个为默认状态，第三个为是否有选择框
         pangolin::CreatePanel("menu").SetBounds(0.0, 1.0, 0.0, pangolin::Attach::Pix(175));
         pangolin::Var<bool> menuFollowCamera("menu.Follow Camera", true, true);
@@ -77,11 +77,13 @@ namespace Goudan_SLAM
         bool bFollow = true;
         // bool bLocalizationMode = false;
 
+        // cout << "------ Start Show viewer -----" <<endl;
         while (1)
         {
             // 清除缓冲区中的当前可写的颜色缓冲 和 深度缓冲
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+            // cout << "Viewer: CurrentOpenGLCameraMatrix:" <<endl<<Twc<<endl;
             // 步骤1：得到最新的相机位姿
             mpMapDrawer->GetCurrentOpenGLCameraMatrix(Twc);
 

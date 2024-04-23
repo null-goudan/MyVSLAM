@@ -185,19 +185,27 @@ namespace Goudan_SLAM
                         cout << "Now Camera Pose:" << endl
                              << mCurrentFrame.mTcw << endl;
                     }
+                }else
+                {
+                    // 根据恒速模型设定当前帧的位姿
+                    // 通过投影的方式在参考帧中找当前帧的匹配点
+                    // 优化每个特征点所对应的3D点的投影误差即可得到位姿
+                    bOK = TrackWithMotionModel();
+                    if (!bOK)
+                        bOK = TrackReferenceKeyFrame();
                 }
             }
             else
             {
-                // 根据恒速模型设定当前帧的位姿
-                // 通过投影的方式在参考帧中找当前帧的匹配点
-                // 优化每个特征点所对应的3D点的投影误差即可得到位姿
-                bOK = TrackWithMotionModel();
-                if (!bOK)
-                    bOK = TrackReferenceKeyFrame();
+                
             }
-            // 只定位模式 :TODO
-            // else
+            // else 只定位模式 :TODO
+
+            // 将最新的关键帧作为reference frame
+            mCurrentFrame.mpReferenceKF = mpReferenceKF;
+
+            // Update drawer
+            mpFrameDrawer->Update(this);
         }
     }
 
@@ -446,6 +454,10 @@ namespace Goudan_SLAM
 
     bool Tracking::TrackWithMotionModel()
     {
+        ORBmatcher matcher(0.9, true);
+
+        mCurrentFrame.SetPose(mVelocity*mLastFrame.mTcw);
+
     }
     void Tracking::SetViewer(Viewer *pViewer)
     {

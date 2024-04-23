@@ -111,6 +111,8 @@ namespace Goudan_SLAM
 
         cv::Mat imWithInfo;
         DrawTextInfo(im, state, imWithInfo);
+
+        return imWithInfo;
     } // DrawFrame
 
     void FrameDrawer::DrawTextInfo(cv::Mat &im, int nState, cv::Mat &imText)

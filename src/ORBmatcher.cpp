@@ -168,7 +168,7 @@ namespace Goudan_SLAM
                 const vector<unsigned int> vIndicesF = Fit->second;
 
                 // 遍历KF中的属于该node的特征点
-                for (size_t iKF = 0; iKF < vIndicesF.size(); iKF++)
+                for (size_t iKF = 0; iKF < vIndicesKF.size(); iKF++)
                 {
                     const unsigned int realIdxKF = vIndicesKF[iKF];
 

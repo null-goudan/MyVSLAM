@@ -11,7 +11,7 @@ namespace Goudan_SLAM
 
     // 给定坐标和关键帧构造地图点
     MapPoint::MapPoint(const cv::Mat &Pos, KeyFrame *pRefKF, Map *pMap)
-        : mnFirstKFid(pRefKF->mnID), mnFirstFrame(pRefKF->mnFrameId), mpMap(pMap), mpRefKF(pRefKF)
+        : mnFirstKFid(pRefKF->mnID), mnFirstFrame(pRefKF->mnFrameId), mpMap(pMap), mpRefKF(pRefKF),mbBad(false)
     {
         Pos.copyTo(mWorldPos);
         mNormalVector = cv::Mat::zeros(3, 1, CV_32F);
