@@ -203,9 +203,50 @@ namespace Goudan_SLAM
 
             // 将最新的关键帧作为reference frame
             mCurrentFrame.mpReferenceKF = mpReferenceKF;
-
+            // 2.2 在帧间匹配得到初始的姿态后，进行localmap获得更多的匹配点，得到更加精准的相机位姿
             // Update drawer
             mpFrameDrawer->Update(this);
+
+            // 如果跟踪是好的, 检查是否要插入新的关键帧
+            if(bOK)
+            {
+                //Update motion model
+                if(!mLastFrame.mTcw.empty())
+                {
+                    // 2.3 更新恒速运动模型中的mVelocity
+                    cv::Mat LastTwc = cv::Mat::eye(4,4,CV_32F);
+                    mLastFrame.GetRotationInverse().copyTo(LastTwc.rowRange(0,3).colRange(0,3));
+                    mLastFrame.GetCameraCenter().copyTo(LastTwc.rowRange(0,3).col(3));
+                    mVelocity = mCurrentFrame.mTcw*LastTwc; // Tcl
+
+                    cout << "velocity : " << mVelocity  <<endl;
+                }
+                else
+                {
+                    mVelocity = cv::Mat();
+                }
+                mpMapDrawer->SetCurrentCameraPose(mCurrentFrame.mTcw);
+
+                // 2.4 清楚UpdateLastFrame中当前帧临时添加的MapPoints
+                for(int i = 0; i<mCurrentFrame.N; i++)
+                {
+                    MapPoint* pMP = mCurrentFrame.mvpMapPoints[i];
+                    if(pMP)
+                        // 排除UpdateLastFrame函数中为了跟踪增加的MapPoints
+                        if(pMP->Observations()<1)
+                        {
+                            mCurrentFrame.mvbOutlier[i] = false;
+                            mCurrentFrame.mvpMapPoints[i]=static_cast<MapPoint*>(NULL);
+                        }
+                }
+                // :TODO
+            }
+
+            if(!mCurrentFrame.mpReferenceKF)
+            mCurrentFrame.mpReferenceKF = mpReferenceKF;
+
+            // 保存上一帧的数据
+            mLastFrame = Frame(mCurrentFrame);
         }
     }
 
@@ -287,9 +328,9 @@ namespace Goudan_SLAM
                 // 将初始化的第一帧作为世界坐标系, 因此第一帧变换矩阵为单位矩阵
                 mInitialFrame.SetPose(cv::Mat::eye(4, 4, CV_32F));
                 // 有Rcw和tcw构造Tcw，并赋值给mTcw, mTcw为世界坐标系到该帧的变换矩阵
-                cv::Mat Tcw = cv::Mat::eye(4, 4, CV_32F);
-                Rcw.copyTo(Tcw.rowRange(0, 3).colRange(0, 3));
-                tcw.copyTo(Tcw.rowRange(0, 3).col(3));
+                cv::Mat Tcw = cv::Mat::eye(4,4,CV_32F);
+                Rcw.copyTo(Tcw.rowRange(0,3).colRange(0,3));
+                tcw.copyTo(Tcw.rowRange(0,3).col(3));
                 mCurrentFrame.SetPose(Tcw);
 
                 // 将三角化得到的3D点包装秤MapPoints

@@ -13,11 +13,11 @@ namespace Goudan_SLAM
 
     // 复制构造函数
     Frame::Frame(const Frame &frame)
-        : mpORBvocabulary(frame.mpORBvocabulary), mpORBextractorLeft(frame.mpORBextractorLeft), 
+        : mpORBvocabulary(frame.mpORBvocabulary), mpORBextractorLeft(frame.mpORBextractorLeft),
           mTimeStamp(frame.mTimeStamp), mK(frame.mK.clone()), mDistCoef(frame.mDistCoef.clone()),
           mbf(frame.mbf), mb(frame.mb), mThDepth(frame.mThDepth), N(frame.N), mvKeys(frame.mvKeys),
           mvKeysRight(frame.mvKeysRight), mvKeysUn(frame.mvKeysUn),
-        mBowVec(frame.mBowVec), mFeatVec(frame.mFeatVec),
+          mBowVec(frame.mBowVec), mFeatVec(frame.mFeatVec),
           mDescriptors(frame.mDescriptors.clone()), mDescriptorsRight(frame.mDescriptorsRight.clone()),
           mvpMapPoints(frame.mvpMapPoints), mvbOutlier(frame.mvbOutlier), mnId(frame.mnId),
           mpReferenceKF(frame.mpReferenceKF), mnScaleLevels(frame.mnScaleLevels),
@@ -33,9 +33,9 @@ namespace Goudan_SLAM
             SetPose(frame.mTcw);
     }
 
-    Frame::Frame(const cv::Mat &imGray, const double &timeStamp, ORBExtractor *extractor, ORBVocabulary* voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth)
-            :mpORBvocabulary(voc),mpORBextractorLeft(extractor),
-     mTimeStamp(timeStamp), mK(K.clone()),mDistCoef(distCoef.clone()), mbf(bf), mThDepth(thDepth)
+    Frame::Frame(const cv::Mat &imGray, const double &timeStamp, ORBExtractor *extractor, ORBVocabulary *voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth)
+        : mpORBvocabulary(voc), mpORBextractorLeft(extractor),
+          mTimeStamp(timeStamp), mK(K.clone()), mDistCoef(distCoef.clone()), mbf(bf), mThDepth(thDepth)
     {
         // Frame ID
         mnId = nNextId++;
@@ -256,11 +256,13 @@ namespace Goudan_SLAM
 
         return vIndices;
     }
-    //计算词包mBowVec和mFeatVec，其中mFeatVec记录了属于第i个node（在第4层）的ni个描述子
-    void Frame::ComputeBoW(){
-        if(mBowVec.empty()){
+    // 计算词包mBowVec和mFeatVec，其中mFeatVec记录了属于第i个node（在第4层）的ni个描述子
+    void Frame::ComputeBoW()
+    {
+        if (mBowVec.empty())
+        {
             vector<cv::Mat> vCurrentDesc = Converter::toDescriptorVector(mDescriptors);
             mpORBvocabulary->transform(vCurrentDesc, mBowVec, mFeatVec, 4);
         }
-    }   
+    }
 }
