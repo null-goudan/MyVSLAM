@@ -46,7 +46,7 @@ src/Viewer.cpp
 src/KeyFrameDatabase.cpp
 src/Converter.cpp
 src/Optimizer.cpp
-src/LoopMapping.cpp
+src/LocalMapping.cpp
 )
 
 target_link_libraries(${PROJECT_NAME}

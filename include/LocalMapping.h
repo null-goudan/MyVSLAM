@@ -96,3 +96,5 @@ namespace Goudan_SLAM
         std::mutex mMutexAccept;
     }
 }
+
+#endif
