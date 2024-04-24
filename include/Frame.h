@@ -35,22 +35,27 @@ namespace Goudan_SLAM
         // 计算旋转，平移和相机中心矩阵
         void UpdatePoseMatrices();
 
+        // 返回相机中心相对于世界坐标系的变换矩阵
         inline cv::Mat GetCameraCenter()
         {
             return mOw.clone();
         }
 
-        // Returns inverse of rotation
+        // 返回旋转矩阵的逆
         inline cv::Mat GetRotationInverse()
         {
             return mRwc.clone();
         }
+
+        // 判断路标点是否在视野中
+        bool isInFrustum(MapPoint* pMP, float viewingCosLimit);
 
         // 计算出特征点所属单元
         bool PosInGrid(const cv::KeyPoint &kp, int &posX, int &posY);
 
         // 找到在 以x,y为中心,边长为2r的方形内且在[minLevel, maxLevel]的特征点
         vector<size_t> GetFeaturesInArea(const float &x, const float &y, const float &r, const int minLevel = -1, const int maxLevel = -1) const;
+
 
     public:
         // Vocabulary used for relocalization.
@@ -92,7 +97,6 @@ namespace Goudan_SLAM
         // Bag of Words Vector structures.
         DBoW2::BowVector mBowVec;
         DBoW2::FeatureVector mFeatVec;
-
 
         // ORB descriptor, each row associated to a keypoint.
         // 左目摄像头和右目摄像头特征点对应的描述子

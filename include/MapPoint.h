@@ -35,14 +35,29 @@ namespace Goudan_SLAM
         int GetIndexInKeyFrame(KeyFrame* pKF);
         bool IsInKeyFrame(KeyFrame* pKF);
 
+        void SetBadFlag();
+        bool isBad();
+
+        void Replace(MapPoint* pMP);
+        MapPoint* GetReplaced();
+
+        void IncreaseVisible(int n=1);
+        void IncreaseFound(int n=1);
+        float GetFoundRatio();
+        inline int GetFound(){
+            return mnFound;
+        }
+
         void ComputeDistinctiveDescriptors();
 
         cv::Mat GetDescriptor();
-
+        
         void UpdateNormalAndDepth();
 
-        void SetBadFlag();
-        bool isBad();
+        float GetMinDistanceInvariance();
+        float GetMaxDistanceInvariance();
+        int PredictScale(const float &currentDist, KeyFrame*pKF);
+        int PredictScale(const float &currentDist, Frame* pF);
 
     public:
         long unsigned int mnId;         // 这个点的全局ID
@@ -52,10 +67,28 @@ namespace Goudan_SLAM
         int nObs;
 
         // Tracking 用到的变量
-        // :TODO
+        float mTrackProjX;
+        float mTrackProjY;
+        float mTrackProjXR;
+        int mnTrackScaleLevel;
+        float mTrackViewCos;
+        // TrackLocalMap - SearchByProjection中决定是否对该点进行投影的变量
+        // mbTrackInView==false的点有几种：
+        // a 已经和当前帧经过匹配（TrackReferenceKeyFrame，TrackWithMotionModel）但在优化过程中认为是外点
+        // b 已经和当前帧经过匹配且为内点，这类点也不需要再进行投影
+        // c 不在当前相机视野中的点（即未通过isInFrustum判断）
+        bool mbTrackInView;
+        // TrackLocalMap - UpdateLocalPoints中防止将MapPoints重复添加至mvpLocalMapPoints的标记
+        long unsigned int mnTrackReferenceForFrame;
+        // TrackLocalMap - SearchLocalPoints中决定是否进行isInFrustum判断的变量
+        // mnLastFrameSeen==mCurrentFrame.mnId的点有几种：
+        // a 已经和当前帧经过匹配（TrackReferenceKeyFrame，TrackWithMotionModel）但在优化过程中认为是外点
+        // b 已经和当前帧经过匹配且为内点，这类点也不需要再进行投影
+        long unsigned int mnLastFrameSeen;
 
         // Local Mapping 用到的变量
-        // :TODO
+        long unsigned int mnBALocalForKF;
+        long unsigned int mnFuseCandidateForKF;
 
         // 回环检测 用到的变量
         // :TODO
@@ -72,6 +105,10 @@ namespace Goudan_SLAM
         cv::Mat mDescriptor;        // 该点对应的描述子  通过 ComputeDistinctiveDescriptors() 得到的最优描述子
 
         KeyFrame* mpRefKF;      // 引用此点的关键帧
+
+        // Tracking counters
+        int mnVisible;
+        int mnFound;
 
         // Bad flag (we do not currently erase MapPoint from memory)
         bool mbBad;
