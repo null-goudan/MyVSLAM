@@ -225,7 +225,7 @@ namespace Goudan_SLAM
                 //Update motion model
                 if(!mLastFrame.mTcw.empty())
                 {
-                    // 2.3 更新恒速运动模型中的mVelocity
+                    // 2.3：更新恒速运动模型TrackWithMotionModel中的mVelocity
                     cv::Mat LastTwc = cv::Mat::eye(4,4,CV_32F);
                     mLastFrame.GetRotationInverse().copyTo(LastTwc.rowRange(0,3).colRange(0,3));
                     mLastFrame.GetCameraCenter().copyTo(LastTwc.rowRange(0,3).col(3));
@@ -234,9 +234,8 @@ namespace Goudan_SLAM
                     // cout << "velocity : " << mVelocity  <<endl;
                 }
                 else
-                {
                     mVelocity = cv::Mat();
-                }
+                
                 mpMapDrawer->SetCurrentCameraPose(mCurrentFrame.mTcw);
 
                 // 2.4 清除UpdateLastFrame中当前帧临时添加的MapPoints
@@ -423,7 +422,11 @@ namespace Goudan_SLAM
         // :TODO
 
         // BA优化
-        // :TODO
+        // Bundle Adjustment
+        cout << "New Map created with " << mpMap->MapPointsInMap() << " points" << endl;
+
+        // 步骤5：BA优化
+        // Optimizer::GlobalBundleAdjustemnt(mpMap,20);
 
         // 将MapPoints中值深度归一化到1，并归一化两帧之间变换
         // 单目传感器无法恢复真实的深度，这里将点云中值深度（欧式距离，不是指z）归一化到1

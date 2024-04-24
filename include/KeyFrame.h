@@ -141,8 +141,6 @@ namespace Goudan_SLAM
         // 和Frame类中的定义相同
         const std::vector<cv::KeyPoint> mvKeys;
         const std::vector<cv::KeyPoint> mvKeysUn;
-        // const std::vector<float> mvuRight; // negative value for monocular points
-        const std::vector<float> mvDepth; // negative value for monocular points
         const cv::Mat mDescriptors;
 
         // // BoW
@@ -189,6 +187,14 @@ namespace Goudan_SLAM
         std::map<KeyFrame*,int> mConnectedKeyFrameWeights; ///< 与该关键帧连接的关键帧与权重
         std::vector<KeyFrame*> mvpOrderedConnectedKeyFrames; ///< 排序后的关键帧
         std::vector<int> mvOrderedWeights; ///< 排序后的权重(从大到小)
+
+        // Spanning Tree and Loop Edges
+        // std::set是集合，相比vector，进行插入数据这样的操作时会自动排序
+        bool mbFirstConnection;
+        KeyFrame* mpParent;
+        std::set<KeyFrame*> mspChildrens;
+        std::set<KeyFrame*> mspLoopEdges;
+
 
         // Bad flags
         bool mbNotErase;
