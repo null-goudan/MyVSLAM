@@ -11,7 +11,7 @@ namespace Goudan_SLAM
 
     // 给定坐标和关键帧构造地图点
     MapPoint::MapPoint(const cv::Mat &Pos, KeyFrame *pRefKF, Map *pMap)
-        : mnFirstKFid(pRefKF->mnID), mnFirstFrame(pRefKF->mnFrameId), mpMap(pMap), mpRefKF(pRefKF),mbBad(false)
+        : mnFirstKFid(pRefKF->mnID), mnFirstFrame(pRefKF->mnFrameId), mpMap(pMap), mpRefKF(pRefKF), mbBad(false)
     {
         Pos.copyTo(mWorldPos);
         mNormalVector = cv::Mat::zeros(3, 1, CV_32F);
@@ -189,9 +189,10 @@ namespace Goudan_SLAM
      */
     void MapPoint::ComputeDistinctiveDescriptors()
     {
+        // Retrieve all observed descriptors
         vector<cv::Mat> vDescriptors;
 
-        std::map<KeyFrame *, size_t> observations;
+        map<KeyFrame *, size_t> observations;
 
         {
             unique_lock<mutex> lock1(mMutexFeatures);
@@ -217,12 +218,13 @@ namespace Goudan_SLAM
         if (vDescriptors.empty())
             return;
 
+        // Compute distances between them
         // 获得这些描述子两两之间的距离
         const size_t N = vDescriptors.size();
 
+        // float Distances[N][N];
         std::vector<std::vector<float>> Distances;
         Distances.resize(N, vector<float>(N, 0));
-
         for (size_t i = 0; i < N; i++)
         {
             Distances[i][i] = 0;
@@ -234,6 +236,7 @@ namespace Goudan_SLAM
             }
         }
 
+        // Take the descriptor with least median distance to the rest
         int BestMedian = INT_MAX;
         int BestIdx = 0;
         for (size_t i = 0; i < N; i++)
@@ -256,10 +259,17 @@ namespace Goudan_SLAM
 
         {
             unique_lock<mutex> lock(mMutexFeatures);
+
             // 最好的描述子，该描述子相对于其他描述子有最小的距离中值
             // 简化来讲，中值代表了这个描述子到其它描述子的平均距离
             // 最好的描述子就是和其它描述子的平均距离最小
-            mDescriptor = vDescriptors[BestIdx].clone();   
+            mDescriptor = vDescriptors[BestIdx].clone();
         }
+    }
+
+    cv::Mat MapPoint::GetDescriptor()
+    {
+        unique_lock<mutex> lock(mMutexFeatures);
+        return mDescriptor.clone();
     }
 }

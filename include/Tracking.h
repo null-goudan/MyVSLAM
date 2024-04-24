@@ -47,6 +47,13 @@ namespace Goudan_SLAM{
         Frame mCurrentFrame;
         cv::Mat mImGray;
 
+        // 记录相机整个轨迹以及最后执行的一些列表，最基础的是我们要记录每一帧的Reference Keyframe 
+        // 并且和他相关的转换矩阵
+        list<cv::Mat> mlRelativeFramePoses;
+        list<KeyFrame*> mlpReferences;
+        list<double> mlFrameTimes;
+        list<bool> mlbLost;
+
         // 初始化相关变量 （单目相机）
         // 初始化时前两帧的相关变量
         std::vector<int> mvIniLastMatches;
@@ -62,11 +69,16 @@ namespace Goudan_SLAM{
     protected:
         void Track();
 
+        void UpdateLastFrame();
+
         void MonocularInitialization();
         void CreateInitialMapMonocular();
 
         bool TrackReferenceKeyFrame();
         bool TrackWithMotionModel();
+
+        // bool NeedNewKeyFrame();
+        // void CreateNewKeyFrame();
 
         bool mbVO;
 

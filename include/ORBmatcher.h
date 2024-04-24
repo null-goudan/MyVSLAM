@@ -17,6 +17,9 @@ namespace Goudan_SLAM{
 
         int SearchForInitialization(Frame &F1, Frame& F2, std::vector<cv::Point2f> &vbPrevMatched, std::vector<int> &vnMatches12, int windowSize=10);
         int SearchByBoW(KeyFrame* pKF,Frame &F, vector<MapPoint*> &vpMapPointMatches);
+        
+
+        int SearchByProjection(Frame &CurrentFrame, const Frame &LastFrame, const float th);        
 
     public:
         static const int TH_LOW;

@@ -192,7 +192,19 @@ namespace Goudan_SLAM
                     // 优化每个特征点所对应的3D点的投影误差即可得到位姿
                     bOK = TrackWithMotionModel();
                     if (!bOK)
+                    {
                         bOK = TrackReferenceKeyFrame();
+                        if(bOK)
+                        {
+                            cout << "Track with no Velocity model successfully!" << endl;
+                            cout << "Now Camera Pose:" << endl
+                                << mCurrentFrame.mTcw << endl;
+                        }
+                    }else{
+                        cout << "Track with Velocity model successfully!" << endl;
+                            cout << "Now Camera Pose:" << endl
+                                << mCurrentFrame.mTcw << endl;
+                    }
                 }
             }
             else
@@ -219,7 +231,7 @@ namespace Goudan_SLAM
                     mLastFrame.GetCameraCenter().copyTo(LastTwc.rowRange(0,3).col(3));
                     mVelocity = mCurrentFrame.mTcw*LastTwc; // Tcl
 
-                    cout << "velocity : " << mVelocity  <<endl;
+                    // cout << "velocity : " << mVelocity  <<endl;
                 }
                 else
                 {
@@ -227,7 +239,7 @@ namespace Goudan_SLAM
                 }
                 mpMapDrawer->SetCurrentCameraPose(mCurrentFrame.mTcw);
 
-                // 2.4 清楚UpdateLastFrame中当前帧临时添加的MapPoints
+                // 2.4 清除UpdateLastFrame中当前帧临时添加的MapPoints
                 for(int i = 0; i<mCurrentFrame.N; i++)
                 {
                     MapPoint* pMP = mCurrentFrame.mvpMapPoints[i];
@@ -240,13 +252,35 @@ namespace Goudan_SLAM
                         }
                 }
                 // :TODO
+
+                // // 2.6：检测并插入关键帧，对于双目会产生新的MapPoints
+                // if(NeedNewKeyFrame())
+                //     CreateNewKeyFrame();
             }
 
             if(!mCurrentFrame.mpReferenceKF)
-            mCurrentFrame.mpReferenceKF = mpReferenceKF;
+                mCurrentFrame.mpReferenceKF = mpReferenceKF;
 
             // 保存上一帧的数据
             mLastFrame = Frame(mCurrentFrame);
+        }
+
+        // 步骤3: 记录位姿信息. 用于轨迹复现
+        if(!mCurrentFrame.mTcw.empty())
+        {
+            // 计算相对姿态T_currentFrame_referenceKeyFrame
+            cv::Mat Tcr = mCurrentFrame.mTcw*mCurrentFrame.mpReferenceKF->GetPose();
+            mlRelativeFramePoses.push_back(Tcr);
+            mlpReferences.push_back(mpReferenceKF);
+            mlFrameTimes.push_back(mCurrentFrame.mTimeStamp);
+            mlbLost.push_back(mState==LOST);
+        }
+        else{
+             // 如果跟踪失败，则相对位姿使用上一次值
+            mlRelativeFramePoses.push_back(mlRelativeFramePoses.back());
+            mlpReferences.push_back(mlpReferences.back());
+            mlFrameTimes.push_back(mlFrameTimes.back());
+            mlbLost.push_back(mState==LOST);
         }
     }
 
@@ -373,9 +407,9 @@ namespace Goudan_SLAM
             pMP->AddObservation(pKFcur, mvIniMatches[i]);
 
             // b 从众多观测到该点的特征点中挑选区分度最高的描述子
-            // pMP->ComputeDistinctiveDescriptors();
+            pMP->ComputeDistinctiveDescriptors();
             // c 更新该点的平均观测方向以及观测距离的范围
-            // pMP->UpdateNormalAndDepth();
+            pMP->UpdateNormalAndDepth();
 
             // Fill Current Frame structure
             mCurrentFrame.mvpMapPoints[mvIniMatches[i]] = pMP;
@@ -497,9 +531,71 @@ namespace Goudan_SLAM
     {
         ORBmatcher matcher(0.9, true);
 
+        UpdateLastFrame();
+
         mCurrentFrame.SetPose(mVelocity*mLastFrame.mTcw);
 
+        fill(mCurrentFrame.mvpMapPoints.begin(), mCurrentFrame.mvpMapPoints.end(),static_cast<MapPoint*>(NULL));
+
+        int th = 7;
+
+        // 2. 根据匀速模型进行对上一帧的MapPoints进行跟踪
+        // 根据上一帧特征点对应的3D点投影的位置缩小特征点匹配范围
+        int nmatches = matcher.SearchByProjection(mCurrentFrame, mLastFrame, th);
+
+         // 如果跟踪的点少，则扩大搜索半径再来一次
+        if(nmatches<20)
+        {
+            cout << "ProjectMatch num too less" <<endl;
+            fill(mCurrentFrame.mvpMapPoints.begin(),mCurrentFrame.mvpMapPoints.end(),static_cast<MapPoint*>(NULL));
+            nmatches = matcher.SearchByProjection(mCurrentFrame,mLastFrame,2*th);
+        }
+
+        if(nmatches<20)
+            return false;
+
+        // Optimize frame pose with all matches
+        // 步骤3：优化位姿，only-pose BA优化
+        Optimizer::PoseOptimization(&mCurrentFrame);
+
+        // 步骤4：优化位姿后剔除outlier的mvpMapPoints
+        int nmatchesMap = 0;
+        for(int i =0; i<mCurrentFrame.N; i++)
+        {
+            if(mCurrentFrame.mvpMapPoints[i])
+            {
+                if(mCurrentFrame.mvbOutlier[i])
+                {
+                    MapPoint* pMP = mCurrentFrame.mvpMapPoints[i];
+
+                    mCurrentFrame.mvpMapPoints[i]=static_cast<MapPoint*>(NULL);
+                    mCurrentFrame.mvbOutlier[i]=false;
+                    // pMP->mbTrackInView = false;
+                    // pMP->mnLastFrameSeen = mCurrentFrame.mnId;
+                    nmatches--;
+                }
+                else if(mCurrentFrame.mvpMapPoints[i]->Observations()>0)
+                    nmatchesMap++;
+            }
+        }    
+
+        return nmatchesMap>=10;
     }
+
+    void Tracking::UpdateLastFrame()
+    {
+        // 1. 更新最近一帧的位姿
+        KeyFrame* pRef = mLastFrame.mpReferenceKF;
+        // KeyFrame* pRef = mLastFrame.mpReferenceKF;
+        cv::Mat Tlr = mlRelativeFramePoses.back();
+
+        mLastFrame.SetPose(Tlr*pRef->GetPose()); // Tlr*Trw = Tlw 1:last r:reference w:world
+
+    }
+
+    // :TODO
+    // bool Tracking::NeedNewKeyFrame()
+
     void Tracking::SetViewer(Viewer *pViewer)
     {
         mpViewer = pViewer;
