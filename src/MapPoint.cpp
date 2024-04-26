@@ -84,6 +84,12 @@ namespace Goudan_SLAM
             SetBadFlag();
     }
 
+    map<KeyFrame *, size_t> MapPoint::GetObservations()
+    {
+        unique_lock<mutex> lock(mMutexFeatures);
+        return mObservations;
+    }
+
     // 告知可以观测到该MapPoint的Frame，该点已被删除
     void MapPoint::SetBadFlag()
     {
@@ -212,7 +218,7 @@ namespace Goudan_SLAM
             KeyFrame *pKF = mit->first;
 
             // if (!pKF->isBad())
-                vDescriptors.push_back(pKF->mDescriptors.row(mit->second));
+            vDescriptors.push_back(pKF->mDescriptors.row(mit->second));
         }
 
         if (vDescriptors.empty())
@@ -272,4 +278,97 @@ namespace Goudan_SLAM
         unique_lock<mutex> lock(mMutexFeatures);
         return mDescriptor.clone();
     }
+
+    /**
+     * @brief Increase Visible
+     *
+     * Visible表示：
+     * 1. 该MapPoint在某些帧的视野范围内，通过Frame::isInFrustum()函数判断
+     * 2. 该MapPoint被这些帧观测到，但并不一定能和这些帧的特征点匹配上
+     *    例如：有一个MapPoint（记为M），在某一帧F的视野范围内，
+     *    但并不表明该点M可以和F这一帧的某个特征点能匹配上
+     */
+    void MapPoint::IncreaseVisible(int n)
+    {
+        unique_lock<mutex> lock(mMutexFeatures);
+        mnVisible += n;
+    }
+
+    /**
+     * @brief Increase Found
+     *
+     * 能找到该点的帧数+n，n默认为1
+     * @see Tracking::TrackLocalMap()
+     */
+    void MapPoint::IncreaseFound(int n)
+    {
+        unique_lock<mutex> lock(mMutexFeatures);
+        mnFound += n;
+    }
+
+    float MapPoint::GetFoundRatio()
+    {
+        unique_lock<mutex> lock(mMutexFeatures);
+        return static_cast<float>(mnFound) / mnVisible;
+    }
+
+    float MapPoint::GetMinDistanceInvariance()
+    {
+        unique_lock<mutex> lock(mMutexPos);
+        return 0.8f * mfMinDistance;
+    }
+
+    float MapPoint::GetMaxDistanceInvariance()
+    {
+        unique_lock<mutex> lock(mMutexPos);
+        return 1.2f * mfMaxDistance;
+    }
+
+    //              ____
+    // Nearer      /____\     level:n-1 --> dmin
+    //            /______\                       d/dmin = 1.2^(n-1-m)
+    //           /________\   level:m   --> d
+    //          /__________\                     dmax/d = 1.2^m
+    // Farther /____________\ level:0   --> dmax
+    //
+    //           log(dmax/d)
+    // m = ceil(------------)
+    //            log(1.2)
+    int MapPoint::PredictScale(const float &currentDist, KeyFrame *pKF)
+    {
+        float ratio;
+        {
+            unique_lock<mutex> lock(mMutexPos);
+            // mfMaxDistance = ref_dist*levelScaleFactor为参考帧考虑上尺度后的距离
+            // ratio = mfMaxDistance/currentDist = ref_dist/cur_dist
+            ratio = mfMaxDistance / currentDist;
+        }
+
+        // 同时取log线性化
+        int nScale = ceil(log(ratio) / pKF->mfLogScaleFactor);
+        if (nScale < 0)
+            nScale = 0;
+        else if (nScale >= pKF->mnScaleLevels)
+            nScale = pKF->mnScaleLevels - 1;
+
+        return nScale;
+    }
+
+    int MapPoint::PredictScale(const float &currentDist, Frame *pF)
+    {
+        float ratio;
+        {
+            unique_lock<mutex> lock(mMutexPos);
+            ratio = mfMaxDistance / currentDist;
+        }
+
+        int nScale = ceil(log(ratio) / pF->mfLogScaleFactor);
+        if (nScale < 0)
+            nScale = 0;
+        else if (nScale >= pF->mnScaleLevels)
+            nScale = pF->mnScaleLevels - 1;
+
+        return nScale;
+    }
+
 }

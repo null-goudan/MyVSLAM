@@ -94,7 +94,7 @@ namespace Goudan_SLAM
 
         bool mbAcceptKeyFrames;
         std::mutex mMutexAccept;
-    }
+    };
 }
 
 #endif

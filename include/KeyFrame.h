@@ -43,7 +43,7 @@ namespace Goudan_SLAM
         std::set<KeyFrame *> GetConnectedKeyFrames();
         std::vector<KeyFrame *> GetVectorCovisibleKeyFrames();
         std::vector<KeyFrame *> GetBestCovisibilityKeyFrames(const int &N);
-        std::vector<KeyFrame *> GetConvisiblesByWeight(const int &w);
+        std::vector<KeyFrame *> GetCovisiblesByWeight(const int &w);
         int GetWeight(KeyFrame *pKF);
 
         // Spanning tree functions

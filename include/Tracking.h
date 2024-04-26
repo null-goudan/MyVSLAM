@@ -63,7 +63,7 @@ namespace Goudan_SLAM{
         Frame mInitialFrame;
 
 
-        bool mbOnlyTracking;
+        bool mbOnlyTracking;        // 只定位模式
         void Reset();
     
     protected:
@@ -77,7 +77,15 @@ namespace Goudan_SLAM{
         bool TrackReferenceKeyFrame();
         bool TrackWithMotionModel();
 
-        // bool NeedNewKeyFrame();
+        
+        void UpdateLocalMap();
+        void UpdateLocalPoints();
+        void UpdateLocalKeyFrames();
+
+        bool TrackLocalMap();
+        void SearchLocalPoints();
+
+        bool NeedNewKeyFrame();
         // void CreateNewKeyFrame();
 
         bool mbVO;

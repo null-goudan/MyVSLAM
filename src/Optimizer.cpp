@@ -8,11 +8,11 @@
 #include "Thirdparty/g2o/g2o/types/types_six_dof_expmap.h"
 #include "Thirdparty/g2o/g2o/types/types_seven_dof_expmap.h"
 
-#include<Eigen/StdVector>
+#include <Eigen/StdVector>
 
 #include "Converter.h"
 
-#include<mutex>
+#include <mutex>
 
 namespace Goudan_SLAM
 {
@@ -158,7 +158,7 @@ namespace Goudan_SLAM
     {
         vector<KeyFrame *> vpKFs = pMap->GetAllKeyFrames();
         vector<MapPoint *> vpMP = pMap->GetAllMapPoints();
-        // BundleAdjustment(vpKFs, vpMP, nIterations, pbStopFlag, nLoopKF, bRobust);
+        BundleAdjustment(vpKFs, vpMP, nIterations, pbStopFlag, nLoopKF, bRobust);
     }
 
     /**
@@ -182,8 +182,7 @@ namespace Goudan_SLAM
      *          nLoopKF  关键帧的个数
      *          bRobust  是否使用核函数
      */
-    
-    /*
+
     void Optimizer::BundleAdjustment(const vector<KeyFrame *> &vpKFs, const vector<MapPoint *> &vpMP,
                                      int nIterations, bool *pbStopFlag, const unsigned long nLoopKF, const bool bRobust)
     {
@@ -236,7 +235,7 @@ namespace Goudan_SLAM
                 continue;
             g2o::VertexSBAPointXYZ *vPoint = new g2o::VertexSBAPointXYZ();
             vPoint->setEstimate(Converter::toVector3d(pMP->GetWorldPos()));
-            const int id = pMP->mnId + maxKFid + 1;
+            const int id = pMP->mnId+maxKFid+1;
             vPoint->setId(id);
             vPoint->setMarginalized(true);
             optimizer.addVertex(vPoint);
@@ -314,12 +313,12 @@ namespace Goudan_SLAM
             {
                 pKF->SetPose(Converter::toCvMat(SE3quat));
             }
-            // else
-            // {
-            //     pKF->mTcwGBA.create(4, 4, CV_32F);
-            //     Converter::toCvMat(SE3quat).copyTo(pKF->mTcwGBA);
-            //     pKF->mnBAGlobalForKF = nLoopKF;
-            // }
+            else
+            {
+                pKF->mTcwGBA.create(4, 4, CV_32F);
+                Converter::toCvMat(SE3quat).copyTo(pKF->mTcwGBA);
+                pKF->mnBAGlobalForKF = nLoopKF;
+            }
         }
 
         // Points
@@ -339,13 +338,13 @@ namespace Goudan_SLAM
                 pMP->SetWorldPos(Converter::toCvMat(vPoint->estimate()));
                 pMP->UpdateNormalAndDepth();
             }
-            // else
-            // {
-            //     pMP->mPosGBA.create(3, 1, CV_32F);
-            //     Converter::toCvMat(vPoint->estimate()).copyTo(pMP->mPosGBA);
-            //     pMP->mnBAGlobalForKF = nLoopKF;
-            // }
+            else
+            {
+                pMP->mPosGBA.create(3, 1, CV_32F);
+                Converter::toCvMat(vPoint->estimate()).copyTo(pMP->mPosGBA);
+                pMP->mnBAGlobalForKF = nLoopKF;
+            }
         }
     }
-    */
+
 }
