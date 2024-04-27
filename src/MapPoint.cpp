@@ -143,6 +143,7 @@ namespace Goudan_SLAM
     // 更新平均观测方向以及观测距离范围
     void MapPoint::UpdateNormalAndDepth()
     {
+
         map<KeyFrame *, size_t> observations;
         KeyFrame *pRefKF;
         cv::Mat Pos;
@@ -167,7 +168,7 @@ namespace Goudan_SLAM
             KeyFrame *pKF = mit->first;
             cv::Mat Owi = pKF->GetCameraCenter();
             cv::Mat normali = mWorldPos - Owi;
-            normal = normal + normali / cv::norm(normali);
+            normal = normal + normali / cv::norm(normali); // 对所有关键帧对该点的观测方向归一化为单位向量进行求和
             n++;
         }
 
@@ -217,8 +218,8 @@ namespace Goudan_SLAM
         {
             KeyFrame *pKF = mit->first;
 
-            // if (!pKF->isBad())
-            vDescriptors.push_back(pKF->mDescriptors.row(mit->second));
+            if (!pKF->isBad())
+                vDescriptors.push_back(pKF->mDescriptors.row(mit->second));
         }
 
         if (vDescriptors.empty())

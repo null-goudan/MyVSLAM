@@ -295,6 +295,8 @@ namespace Goudan_SLAM
     int ORBmatcher::SearchByProjection(Frame &CurrentFrame, const Frame &LastFrame, const float th)
     {
         int nmatches = 0;
+
+        // Rotation Histogram (to check rotation consistency)
         vector<int> rotHist[HISTO_LENGTH];
         for (int i = 0; i < HISTO_LENGTH; i++)
             rotHist[i].reserve(500);
@@ -303,12 +305,13 @@ namespace Goudan_SLAM
         const cv::Mat Rcw = CurrentFrame.mTcw.rowRange(0, 3).colRange(0, 3);
         const cv::Mat tcw = CurrentFrame.mTcw.rowRange(0, 3).col(3);
 
-        const cv::Mat twc = -Rcw.t() * tcw;
+        const cv::Mat twc = -Rcw.t() * tcw; // twc(w)
 
         const cv::Mat Rlw = LastFrame.mTcw.rowRange(0, 3).colRange(0, 3);
-        const cv::Mat tlw = LastFrame.mTcw.rowRange(0, 3).col(3);
+        const cv::Mat tlw = LastFrame.mTcw.rowRange(0, 3).col(3); // tlw(l)
 
-        const cv::Mat tlc = Rlw * twc + tlw;
+        // vector from LastFrame to CurrentFrame expressed in LastFrame
+        const cv::Mat tlc = Rlw * twc + tlw; // Rlw*twc(w) = twc(l), twc(l) + tlw(l) = tlc(l)
 
         for (int i = 0; i < LastFrame.N; i++)
         {
@@ -319,7 +322,7 @@ namespace Goudan_SLAM
                 if (!LastFrame.mvbOutlier[i])
                 {
                     // 对上一帧有效的MapPoints进行跟踪
-                    // Project 投影
+                    // Project
                     cv::Mat x3Dw = pMP->GetWorldPos();
                     cv::Mat x3Dc = Rcw * x3Dw + tcw;
 
@@ -340,12 +343,18 @@ namespace Goudan_SLAM
 
                     int nLastOctave = LastFrame.mvKeys[i].octave;
 
+                    // Search in a window. Size depends on scale
                     float radius = th * CurrentFrame.mvScaleFactors[nLastOctave]; // 尺度越大，搜索范围越大
 
                     vector<size_t> vIndices2;
 
-                    // 尺度越大 图像越小
+                    // NOTE 尺度越大,图像越小
+                    // 以下可以这么理解，例如一个有一定面积的圆点，在某个尺度n下它是一个特征点
+                    // 当前进时，圆点的面积增大，在某个尺度m下它是一个特征点，由于面积增大，则需要在更高的尺度下才能检测出来
+                    // 因此m>=n，对应前进的情况，nCurOctave>=nLastOctave。后退的情况可以类推
                     vIndices2 = CurrentFrame.GetFeaturesInArea(u, v, radius, nLastOctave - 1, nLastOctave + 1);
+
+                    cout << "[Project match] : vIndices size:" << vIndices2.size() << endl;
 
                     if (vIndices2.empty())
                         continue;
@@ -355,9 +364,10 @@ namespace Goudan_SLAM
                     int bestDist = 256;
                     int bestIdx2 = -1;
 
+                    // 遍历满足条件的特征点
                     for (vector<size_t>::const_iterator vit = vIndices2.begin(), vend = vIndices2.end(); vit != vend; vit++)
                     {
-                        // 如果该特征点已经有对应的MapPoint了，则退出该次循环
+                        // 如果该特征点已经有对应的MapPoint了,则退出该次循环
                         const size_t i2 = *vit;
                         if (CurrentFrame.mvpMapPoints[i2])
                             if (CurrentFrame.mvpMapPoints[i2]->Observations() > 0)
@@ -373,6 +383,7 @@ namespace Goudan_SLAM
                             bestIdx2 = i2;
                         }
                     }
+
                     // 详见SearchByBoW(KeyFrame* pKF,Frame &F, vector<MapPoint*> &vpMapPointMatches)函数步骤4
                     if (bestDist <= TH_HIGH)
                     {
@@ -394,6 +405,7 @@ namespace Goudan_SLAM
                 }
             }
         }
+
         // Apply rotation consistency
         if (mbCheckOrientation)
         {
@@ -415,6 +427,7 @@ namespace Goudan_SLAM
                 }
             }
         }
+
         return nmatches;
     }
 
@@ -480,7 +493,6 @@ namespace Goudan_SLAM
                 if (F.mvpMapPoints[idx])
                     if (F.mvpMapPoints[idx]->Observations() > 0)
                         continue;
-                
 
                 const cv::Mat &d = F.mDescriptors.row(idx);
 
@@ -519,7 +531,7 @@ namespace Goudan_SLAM
     // 根据观测角度决定 SearchByProjection 的搜索范围
     float ORBmatcher::RadiusByViewingCos(const float &viewCos)
     {
-        if(viewCos>0.998)
+        if (viewCos > 0.998)
             return 2.5;
         else
             return 4.0;

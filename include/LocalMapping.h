@@ -27,7 +27,7 @@ namespace Goudan_SLAM
         // Tread Synch
         void RequestStop();
         void RequestReset();
-        void Stop();
+        bool Stop();
         void Release();
         bool isStopped();
         bool stopRequested();

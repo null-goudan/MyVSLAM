@@ -235,7 +235,7 @@ namespace Goudan_SLAM
                 continue;
             g2o::VertexSBAPointXYZ *vPoint = new g2o::VertexSBAPointXYZ();
             vPoint->setEstimate(Converter::toVector3d(pMP->GetWorldPos()));
-            const int id = pMP->mnId+maxKFid+1;
+            const int id = pMP->mnId + maxKFid + 1;
             vPoint->setId(id);
             vPoint->setMarginalized(true);
             optimizer.addVertex(vPoint);
@@ -347,4 +347,261 @@ namespace Goudan_SLAM
         }
     }
 
+    void static LocalBundleAdjustment(KeyFrame *pKF, bool *pbStopFlag, Map *pMap)
+    {
+        // 用于LocalMapping线程的局部BA优化
+
+        list<KeyFrame *> lLocalKeyFrames;
+
+        // 1. 将当前关键帧加入lLocalKeyFrames;
+        lLocalKeyFrames.push_back(pKF);
+        pKF->mnBAGlobalForKF = pKF->mnID;
+
+        // 2. 找到关键帧连接的关键帧(一级相连)， 加入lLocalKeyFrames中
+        const vector<KeyFrame *> vNeighKFs = pKF->GetVectorCovisibleKeyFrames();
+        for (int i = 0, iend = vNeighKFs.size(); i < iend; i++)
+        {
+            KeyFrame *pKFi = vNeighKFs[i];
+            pKFi->mnBALocalForKF = pKF->mnID;
+            if (!pKFi->isBad())
+                lLocalKeyFrames.push_back(pKFi);
+        }
+
+        // 3. 遍历lLocalKeyFrames 中的关键帧，将它们观测的MapPoints加入到lLocalMapPoints
+        list<MapPoint *> lLocalMapPoints;
+        for (list<KeyFrame *>::iterator lit = lLocalKeyFrames.begin(), lend = lLocalKeyFrames.end(); lit != lend; lit++)
+        {
+            vector<MapPoint *> vpMPs = (*lit)->GetMapPointMatches();
+            for (vector<MapPoint *>::iterator vit = vpMPs.begin(), vend = vpMPs.end(); vit != vend; vit++)
+            {
+                MapPoint *pMP = *vit;
+                if (pMP)
+                {
+                    if (!pMP->isBad())
+                        if (pMP->mnBALocalForKF != pKF->mnID)
+                        {
+                            lLocalMapPoints.push_back(pMP);
+                            pMP->mnBALocalForKF = pKF->mnID; // 防止重复添加
+                        }
+                }
+            }
+        }
+
+        // 4. 得到能被局部MapPoints观测到，但不属于局部关键帧的关键帧， 这些关键帧在局部BA优化时不优化
+        list<KeyFrame *> lFixedCameras;
+        for (list<MapPoint *>::iterator lit = lLocalMapPoints.begin(), lend = lLocalMapPoints.end(); lit != lend; lit++)
+        {
+            map<KeyFrame *, size_t> observations = (*lit)->GetObservations();
+            for (map<KeyFrame *, size_t>::iterator mit = observations.begin(), mend = observations.end(); mit != mend; mit++)
+            {
+                KeyFrame *pKFi = mit->first;
+
+                // pKFi->mnBALocalForKF!=pKF->mnId表示局部关键帧，
+                // 其它的关键帧虽然能观测到，但不属于局部关键帧
+                if (pKFi->mnBALocalForKF != pKF->mnID && pKFi->mnBAFixedForKF != pKF->mnID)
+                {
+                    pKFi->mnBAFixedForKF = pKF->mnID; // 防止重复添加
+                    if (!pKFi->isBad())
+                        lFixedCameras.push_back(pKFi);
+                }
+            }
+        }
+
+        // 5. 构造g2o优化器
+        g2o::SparseOptimizer optimizer;
+        g2o::BlockSolver_6_3::LinearSolverType *linearSolver;
+        linearSolver = new g2o::LinearSolverEigen<g2o::BlockSolver_6_3::PoseMatrixType>();
+
+        g2o::BlockSolver_6_3 *solver_ptr = new g2o::BlockSolver_6_3(linearSolver);
+
+        g2o::OptimizationAlgorithmLevenberg *solver = new g2o::OptimizationAlgorithmLevenberg(solver_ptr);
+        optimizer.setAlgorithm(solver);
+
+        if (pbStopFlag)
+            optimizer.setForceStopFlag(pbStopFlag);
+
+        unsigned long maxKFid = 0;
+
+        // 6. 添加顶点: Pose of Local KeyFrame
+        for (list<KeyFrame *>::iterator lit = lLocalKeyFrames.begin(), lend = lLocalKeyFrames.end(); lit != lend; lit++)
+        {
+            KeyFrame *pKFi = *lit;
+            g2o::VertexSE3Expmap *vSE3 = new g2o::VertexSE3Expmap();
+            vSE3->setEstimate(Converter::toSE3Quat(pKFi->GetPose()));
+            vSE3->setId(pKFi->mnID);
+            vSE3->setFixed(pKFi->mnID == 0); // 第一帧位置固定
+            optimizer.addVertex(vSE3);
+            if (pKFi->mnID > maxKFid)
+                maxKFid = pKFi->mnID;
+        }
+
+        // 7. 添加顶点 Pose of Fixed KeyFrame, 这里调用了vSE3->setFixed(true)
+        for (list<KeyFrame *>::iterator lit = lFixedCameras.begin(), lend = lFixedCameras.end(); lit != lend; lit++)
+        {
+            KeyFrame *pKFi = *lit;
+            g2o::VertexSE3Expmap *vSE3 = new g2o::VertexSE3Expmap();
+            vSE3->setEstimate(Converter::toSE3Quat(pKFi->GetPose()));
+            vSE3->setId(pKFi->mnID);
+            vSE3->setFixed(true);
+            optimizer.addVertex(vSE3);
+            if (pKFi->mnID > maxKFid)
+                maxKFid = pKFi->mnID;
+        }
+
+        // 8. 添加3D顶点
+        const int nExpectedSize = (lLocalKeyFrames.size() + lFixedCameras.size()) * lLocalMapPoints.size();
+
+        vector<g2o::EdgeSE3ProjectXYZ *> vpEdgesMono;
+        vpEdgesMono.reserve(nExpectedSize);
+
+        vector<KeyFrame *> vpEdgeKFMono;
+        vpEdgeKFMono.reserve(nExpectedSize);
+
+        vector<MapPoint *> vpMapPointEdgeMono;
+        vpMapPointEdgeMono.reserve(nExpectedSize);
+
+        const float thHuberMono = sqrt(5.991);
+
+        for (list<MapPoint *>::iterator lit = lLocalMapPoints.begin(), lend = lLocalMapPoints.end(); lit != lend; lit++)
+        {
+            // 添加顶点：MapPoint
+            MapPoint *pMP = *lit;
+            g2o::VertexSBAPointXYZ *vPoint = new g2o::VertexSBAPointXYZ();
+            vPoint->setEstimate(Converter::toVector3d(pMP->GetWorldPos()));
+            int id = pMP->mnId + maxKFid + 1;
+            vPoint->setId(id);
+            vPoint->setMarginalized(true);
+            optimizer.addVertex(vPoint);
+
+            const map<KeyFrame *, size_t> observations = pMP->GetObservations();
+
+            // 9. 对每一对关联的MapPoint和KeyFrame 构建边
+            for (map<KeyFrame *, size_t>::const_iterator mit = observations.begin(), mend = observations.end(); mit != mend; mit++)
+            {
+                KeyFrame *pKFi = mit->first;
+
+                if (!pKFi->isBad())
+                {
+
+                    const cv::KeyPoint &kpUn = pKFi->mvKeysUn[mit->second];
+
+                    Eigen::Matrix<double, 2, 1> obs;
+                    obs << kpUn.pt.x, kpUn.pt.y;
+
+                    g2o::EdgeSE3ProjectXYZ *e = new g2o::EdgeSE3ProjectXYZ();
+
+                    e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(id)));
+                    e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(pKFi->mnID)));
+                    e->setMeasurement(obs);
+                    const float &invSigma2 = pKFi->mvInvLevelSigma2[kpUn.octave];
+                    e->setInformation(Eigen::Matrix2d::Identity() * invSigma2);
+
+                    g2o::RobustKernelHuber *rk = new g2o::RobustKernelHuber;
+                    e->setRobustKernel(rk);
+                    rk->setDelta(thHuberMono);
+
+                    e->fx = pKFi->fx;
+                    e->fy = pKFi->fy;
+                    e->cx = pKFi->cx;
+                    e->cy = pKFi->cy;
+
+                    optimizer.addEdge(e);
+                    vpEdgesMono.push_back(e);
+                    vpEdgeKFMono.push_back(pKFi);
+                    vpMapPointEdgeMono.push_back(pMP);
+                }
+            }
+        }
+        if (pbStopFlag)
+            if (*pbStopFlag)
+                return;
+
+        // 10. 开始优化
+        optimizer.initializeOptimization();
+        optimizer.optimize(5);
+        bool bDoMore = true;
+
+        if (pbStopFlag)
+            if (*pbStopFlag)
+                bDoMore = false;
+
+        if (bDoMore)
+        {
+
+            // 11. 检测outlier，并设置下次不优化
+            for (size_t i = 0, iend = vpEdgesMono.size(); i < iend; i++)
+            {
+                g2o::EdgeSE3ProjectXYZ *e = vpEdgesMono[i];
+                MapPoint *pMP = vpMapPointEdgeMono[i];
+
+                if (pMP->isBad())
+                    continue;
+
+                // 基于卡方检验计算出的阈值（假设测量有一个像素的偏差）
+                if (e->chi2() > 5.991 || !e->isDepthPositive())
+                {
+                    e->setLevel(1); // 不优化
+                }
+
+                e->setRobustKernel(0); // 不使用核函数
+            }
+
+            // 步骤11：排除误差较大的outlier后再次优化
+            optimizer.initializeOptimization(0);
+            optimizer.optimize(10);
+        }
+
+        vector<pair<KeyFrame *, MapPoint *>> vToErase;
+        vToErase.reserve(vpEdgesMono.size());
+
+        // 13.在优化后重新计算误差，剔除连接误差比较大的关键帧和MapPoint
+        for (size_t i = 0, iend = vpEdgesMono.size(); i < iend; i++)
+        {
+            g2o::EdgeSE3ProjectXYZ *e = vpEdgesMono[i];
+            MapPoint *pMP = vpMapPointEdgeMono[i];
+
+            if (pMP->isBad())
+                continue;
+
+            // 基于卡方检验计算出的阈值（假设测量有一个像素的偏差）
+            if (e->chi2() > 5.991 || !e->isDepthPositive())
+            {
+                KeyFrame *pKFi = vpEdgeKFMono[i];
+                vToErase.push_back(make_pair(pKFi, pMP));
+            }
+        }
+
+        unique_lock<mutex> lock(pMap->mMutexMapUpdate);
+
+        // 连接偏差比较大，在关键帧中剔除对该MapPoint的观测
+        // 连接偏差比较大，在MapPoint中剔除对该关键帧的观测
+        if (!vToErase.empty())
+        {
+            for (size_t i = 0; i < vToErase.size(); i++)
+            {
+                KeyFrame *pKFi = vToErase[i].first;
+                MapPoint *pMPi = vToErase[i].second;
+                pKFi->EraseMapPointMatch(pMPi);
+                pMPi->EraseObservation(pKFi);
+            }
+        }
+
+        // 14.优化后更新关键帧位姿以及MapPoints的位置、平均观测方向等属性
+        for (list<KeyFrame *>::iterator lit = lLocalKeyFrames.begin(), lend = lLocalKeyFrames.end(); lit != lend; lit++)
+        {
+            KeyFrame *pKF = *lit;
+            g2o::VertexSE3Expmap *vSE3 = static_cast<g2o::VertexSE3Expmap *>(optimizer.vertex(pKF->mnID));
+            g2o::SE3Quat SE3quat = vSE3->estimate();
+            pKF->SetPose(Converter::toCvMat(SE3quat));
+        }
+
+        // Points
+        for (list<MapPoint *>::iterator lit = lLocalMapPoints.begin(), lend = lLocalMapPoints.end(); lit != lend; lit++)
+        {
+            MapPoint *pMP = *lit;
+            g2o::VertexSBAPointXYZ *vPoint = static_cast<g2o::VertexSBAPointXYZ *>(optimizer.vertex(pMP->mnId + maxKFid + 1));
+            pMP->SetWorldPos(Converter::toCvMat(vPoint->estimate()));
+            pMP->UpdateNormalAndDepth();
+        }
+    }
 }

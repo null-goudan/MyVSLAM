@@ -156,6 +156,8 @@ namespace Goudan_SLAM
             // cout << "Initialize ready." << endl;
             MonocularInitialization();
 
+            // cout << "after initialization Twc:" << endl << mCurrentFrame.mTcw << endl;
+
             mpFrameDrawer->Update(this);
 
             if (mState != OK)
@@ -225,20 +227,20 @@ namespace Goudan_SLAM
 
             // 将最新的关键帧作为reference frame
             mCurrentFrame.mpReferenceKF = mpReferenceKF;
-            // 2.2 在帧间匹配得到初始的姿态后，进行localmap获得更多的匹配点，得到更加精准的相机位姿
-            // 在2.1中主要是两两跟踪（恒速模型跟踪上一帧、跟踪参考帧），这里搜索局部关键帧后搜集所有局部MapPoints，
-            // 然后将局部MapPoints和当前帧进行投影匹配，得到更多匹配的MapPoints后进行Pose优化
-            if (!mbOnlyTracking)
-            {
-                if (!bOK)
-                    bOK = TrackLocalMap();
-            }
-            else
-            {
-                // 重定位
-                if (bOK && !mbVO)
-                    bOK = TrackLocalMap();
-            }
+            // // 2.2 在帧间匹配得到初始的姿态后，进行localmap获得更多的匹配点，得到更加精准的相机位姿
+            // // 在2.1中主要是两两跟踪（恒速模型跟踪上一帧、跟踪参考帧），这里搜索局部关键帧后搜集所有局部MapPoints，
+            // // 然后将局部MapPoints和当前帧进行投影匹配，得到更多匹配的MapPoints后进行Pose优化
+            // if (!mbOnlyTracking)
+            // {
+            //     if (bOK)
+            //         bOK = TrackLocalMap();
+            // }
+            // else
+            // {
+            //     // 重定位
+            //     if (bOK && !mbVO)
+            //         bOK = TrackLocalMap();
+            // }
 
             // Update drawer
             mpFrameDrawer->Update(this);
@@ -253,9 +255,12 @@ namespace Goudan_SLAM
                     cv::Mat LastTwc = cv::Mat::eye(4, 4, CV_32F);
                     mLastFrame.GetRotationInverse().copyTo(LastTwc.rowRange(0, 3).colRange(0, 3));
                     mLastFrame.GetCameraCenter().copyTo(LastTwc.rowRange(0, 3).col(3));
+
+                    cout << "Last Twc :" << endl << LastTwc << endl;
+                    cout << "mCurrent Frame Tcw :" <<endl <<  mCurrentFrame.mTcw <<endl;
                     mVelocity = mCurrentFrame.mTcw * LastTwc; // Tcl
 
-                    // cout << "velocity : " << mVelocity  <<endl;
+                    cout << "velocity : " << mVelocity  <<endl;
                 }
                 else
                     mVelocity = cv::Mat();
@@ -365,7 +370,7 @@ namespace Goudan_SLAM
             // cout<<"Initialize matching.."<<endl;
             ORBmatcher matcher(0.9, true);
             int nmatches = matcher.SearchForInitialization(mInitialFrame, mCurrentFrame, mvbPrevMatched, mvIniMatches, 100);
-            // cout << "inital matcher: num " << nmatches <<endl;
+            cout << "inital matcher: num " << nmatches <<endl;
 
             // 4.初始化两帧之间的匹配点太少，重新初始化
             if (nmatches < 100)
@@ -431,7 +436,10 @@ namespace Goudan_SLAM
             cv::Mat worldPos(mvIniP3D[i]);
             MapPoint *pMP = new MapPoint(worldPos, pKFcur, mpMap);
 
-            // 为MapPoint添加属性: 1. 观测到该点的关键帧 2. 该点的描述子 3. 该点的平均观测方向和深度范围
+            // 为MapPoint添加属性: 
+            // 1. 观测到该点的关键帧
+            // 2. 该点的描述子 
+            // 3. 该点的平均观测方向和深度范围
             // 表示该KeyFrame的哪个特征点可以观测到哪个3D点
             pKFini->AddMapPoint(pMP, i);
             pKFcur->AddMapPoint(pMP, mvIniMatches[i]);
@@ -462,7 +470,7 @@ namespace Goudan_SLAM
         cout << "New Map created with " << mpMap->MapPointsInMap() << " points" << endl;
 
         // 步骤5：BA优化
-        Optimizer::GlobalBundleAdjustemnt(mpMap,20);
+        // Optimizer::GlobalBundleAdjustemnt(mpMap,20);
 
         // 将MapPoints中值深度归一化到1，并归一化两帧之间变换
         // 单目传感器无法恢复真实的深度，这里将点云中值深度（欧式距离，不是指z）归一化到1
@@ -499,6 +507,7 @@ namespace Goudan_SLAM
             }
         }
 
+        mCurrentFrame.SetPose(pKFcur->GetPose());
         mnLastKeyFrameId=mCurrentFrame.mnId;
         mpLastKeyFrame = pKFcur;
 
@@ -509,7 +518,10 @@ namespace Goudan_SLAM
         mCurrentFrame.mpReferenceKF = pKFcur;
 
         mLastFrame = Frame(mCurrentFrame); // 重定位用的上一帧信息
-        // mvpLocalMapPoints=mpMap->GetAllMapPoints();
+
+        // cout <<"[Initialization info ]: mLastFrame Tcw"  << endl<< mLastFrame.mTcw <<endl;
+        // cout << "[Initialization info ]: mCurrentFrame Tcw"  << endl<< mCurrentFrame.mTcw<<endl;
+
 
         mpMap->SetReferenceMapPoints(mvpLocalMapPoints);
 
@@ -579,6 +591,8 @@ namespace Goudan_SLAM
 
         mCurrentFrame.SetPose(mVelocity * mLastFrame.mTcw);
 
+        mpMapDrawer->SetCurrentCameraPose(mVelocity * mLastFrame.mTcw);
+
         fill(mCurrentFrame.mvpMapPoints.begin(), mCurrentFrame.mvpMapPoints.end(), static_cast<MapPoint *>(NULL));
 
         int th = 15;
@@ -596,8 +610,10 @@ namespace Goudan_SLAM
         }
 
         if (nmatches < 20)
+        {
+            cout << "ProjectMatch num too less" << endl;
             return false;
-
+        }
         // Optimize frame pose with all matches
         // 步骤3：优化位姿，only-pose BA优化
         Optimizer::PoseOptimization(&mCurrentFrame);
@@ -610,7 +626,7 @@ namespace Goudan_SLAM
             {
                 if (mCurrentFrame.mvbOutlier[i])
                 {
-                    MapPoint *pMP = mCurrentFrame.mvpMapPoints[i];
+                    // MapPoint *pMP = mCurrentFrame.mvpMapPoints[i];
 
                     mCurrentFrame.mvpMapPoints[i] = static_cast<MapPoint *>(NULL);
                     mCurrentFrame.mvbOutlier[i] = false;
@@ -817,17 +833,17 @@ namespace Goudan_SLAM
             }
 
             // 策略2.3:自己的父关键帧
-            KeyFrame *pParent = pKF->GetParent();
-            if (pParent)
-            {
-                // mnTrackReferenceForFrame防止重复添加局部关键帧
-                if (pParent->mnTrackReferenceForFrame != mCurrentFrame.mnId)
-                {
-                    mvpLocalKeyFrames.push_back(pParent);
-                    pParent->mnTrackReferenceForFrame = mCurrentFrame.mnId;
-                    break;
-                }
-            }
+            // KeyFrame *pParent = pKF->GetParent();
+            // if (pParent)
+            // {
+            //     // mnTrackReferenceForFrame防止重复添加局部关键帧
+            //     if (pParent->mnTrackReferenceForFrame != mCurrentFrame.mnId)
+            //     {
+            //         mvpLocalKeyFrames.push_back(pParent);
+            //         pParent->mnTrackReferenceForFrame = mCurrentFrame.mnId;
+            //         break;
+            //     }
+            // }
         }
 
         // 策略3：更新当前帧的参考关键帧，与自己共视程度最高的关键帧作为参考关键帧
