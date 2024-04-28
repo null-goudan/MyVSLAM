@@ -15,10 +15,8 @@ namespace Goudan_SLAM
     Frame::Frame(const Frame &frame)
         : mpORBvocabulary(frame.mpORBvocabulary), mpORBextractorLeft(frame.mpORBextractorLeft),
           mTimeStamp(frame.mTimeStamp), mK(frame.mK.clone()), mDistCoef(frame.mDistCoef.clone()),
-          mbf(frame.mbf), mb(frame.mb), mThDepth(frame.mThDepth), N(frame.N), mvKeys(frame.mvKeys),
-          mvKeysRight(frame.mvKeysRight), mvKeysUn(frame.mvKeysUn),
-          mBowVec(frame.mBowVec), mFeatVec(frame.mFeatVec),
-          mDescriptors(frame.mDescriptors.clone()), mDescriptorsRight(frame.mDescriptorsRight.clone()),
+          mbf(frame.mbf), mb(frame.mb), mThDepth(frame.mThDepth), N(frame.N), mvKeys(frame.mvKeys), mvKeysUn(frame.mvKeysUn),
+          mBowVec(frame.mBowVec), mFeatVec(frame.mFeatVec), mDescriptors(frame.mDescriptors.clone()),
           mvpMapPoints(frame.mvpMapPoints), mvbOutlier(frame.mvbOutlier), mnId(frame.mnId),
           mpReferenceKF(frame.mpReferenceKF), mnScaleLevels(frame.mnScaleLevels),
           mfScaleFactor(frame.mfScaleFactor), mfLogScaleFactor(frame.mfLogScaleFactor),
@@ -34,17 +32,16 @@ namespace Goudan_SLAM
     }
 
     Frame::Frame(const cv::Mat &imGray, const double &timeStamp, ORBExtractor *extractor, ORBVocabulary *voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth)
-        : mpORBvocabulary(voc), mpORBextractorLeft(extractor),
-          mTimeStamp(timeStamp), mK(K.clone()), mDistCoef(distCoef.clone()), mbf(bf), mThDepth(thDepth)
+        : mpORBvocabulary(voc), mpORBextractorLeft(extractor), mTimeStamp(timeStamp), mK(K.clone()), mDistCoef(distCoef.clone()), mbf(bf), mThDepth(thDepth)
     {
         // Frame ID
         mnId = nNextId++;
 
-        // Scale Level
+        // Scale Level Info
         mnScaleLevels = mpORBextractorLeft->GetLevels();
         mfScaleFactor = mpORBextractorLeft->GetScaleFactor();
         mfLogScaleFactor = log(mfScaleFactor);
-        mvScaleFactors = mpORBextractorLeft->GetInverseScaleFactors();
+        mvScaleFactors = mpORBextractorLeft->GetScaleFactors();
         mvInvScaleFactors = mpORBextractorLeft->GetInverseScaleFactors();
         mvLevelSigma2 = mpORBextractorLeft->GetScaleSigmaSquares();
         mvInvLevelSigma2 = mpORBextractorLeft->GetInverseScaleSigmaSquares();
@@ -57,12 +54,13 @@ namespace Goudan_SLAM
         if (mvKeys.empty())
             return;
 
-        // 使用矫正函数矫正orb提取的特征点
+        // 调用OpenCV的矫正函数矫正orb提取的特征点
         UndistortKeyPoints();
 
         mvpMapPoints = vector<MapPoint *>(N, static_cast<MapPoint *>(NULL));
         mvbOutlier = vector<bool>(N, false);
 
+        // This is done only for the first Frame (or after a change in the calibration)
         if (mbInitialComputations)
         {
             ComputeImageBounds(imGray);
@@ -131,6 +129,7 @@ namespace Goudan_SLAM
             for (unsigned int j = 0; j < FRAME_GRID_ROWS; j++)
                 mGrid[i][j].reserve(nReserve);
 
+        // 在mGrid中记录了各特征点
         for (int i = 0; i < N; i++)
         {
             const cv::KeyPoint &kp = mvKeysUn[i];

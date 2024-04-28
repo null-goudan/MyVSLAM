@@ -18,7 +18,7 @@ namespace Goudan_SLAM
           mfLogScaleFactor(F.mfLogScaleFactor), mvScaleFactors(F.mvScaleFactors), mvLevelSigma2(F.mvLevelSigma2),
           mvInvLevelSigma2(F.mvInvLevelSigma2), mnMinX(F.mnMinX), mnMinY(F.mnMinY), mnMaxX(F.mnMaxX),
           mnMaxY(F.mnMaxY), mK(F.mK), mvpMapPoints(F.mvpMapPoints), mpKeyFrameDB(pKFDB),
-          mpORBvocabulary(F.mpORBvocabulary), mbNotErase(false),
+          mpORBvocabulary(F.mpORBvocabulary), mbFirstConnection(true), mpParent(NULL), mbNotErase(false),
           mbToBeErased(false), mbBad(false), mHalfBaseline(F.mb / 2), mpMap(pMap)
     {
         mnID = nNextId++;
@@ -46,7 +46,11 @@ namespace Goudan_SLAM
         Twc = cv::Mat::eye(4, 4, Tcw.type());
         Rwc.copyTo(Twc.rowRange(0, 3).colRange(0, 3));
         Ow.copyTo(Twc.rowRange(0, 3).col(3));
+        // center为相机坐标系（左目）下，立体相机中心的坐标
+        // 立体相机中心点坐标与左目相机坐标之间只是在x轴上相差mHalfBaseline,
+        // 因此可以看出，立体相机中两个摄像头的连线为x轴，正方向为左目相机指向右目相机
         cv::Mat center = (cv::Mat_<float>(4, 1) << mHalfBaseline, 0, 0, 1);
+        // 世界坐标系下，左目相机中心到立体相机中心的向量，方向由左目相机指向立体相机中心
         Cw = Twc * center;
     }
 
@@ -87,9 +91,43 @@ namespace Goudan_SLAM
         mvpMapPoints[idx] = pMp;
     }
 
+    void KeyFrame::EraseMapPointMatch(const size_t &idx)
+    {
+        unique_lock<mutex> lock(mMutexFeatures);
+        mvpMapPoints[idx] = static_cast<MapPoint *>(NULL);
+    }
+
+    void KeyFrame::EraseMapPointMatch(MapPoint *pMP)
+    {
+        int idx = pMP->GetIndexInKeyFrame(this);
+        if (idx >= 0)
+            mvpMapPoints[idx] = static_cast<MapPoint *>(NULL);
+    }
+
     void KeyFrame::ReplaceMapPointMatch(const size_t &idx, MapPoint *pMP)
     {
         mvpMapPoints[idx] = pMP;
+    }
+
+    set<MapPoint *> KeyFrame::GetMapPoints()
+    {
+        unique_lock<mutex> lock(mMutexFeatures);
+        set<MapPoint *> s;
+        for (size_t i = 0, iend = mvpMapPoints.size(); i < iend; i++)
+        {
+            if (!mvpMapPoints[i])
+                continue;
+            MapPoint *pMP = mvpMapPoints[i];
+            if (!pMP->isBad())
+                s.insert(pMP);
+        }
+        return s;
+    }
+
+    MapPoint *KeyFrame::GetMapPoint(const size_t &idx)
+    {
+        unique_lock<mutex> lock(mMutexFeatures);
+        return mvpMapPoints[idx];
     }
 
     void KeyFrame::ComputeBoW()
@@ -109,18 +147,136 @@ namespace Goudan_SLAM
             unique_lock<mutex> lock(mMutexConnections);
             if (mnID == 0)
                 return;
-            else if (mbNotErase) // 表示不该擦除该KeyFrame
+            else if (mbNotErase) // mbNotErase表示不应该擦除该KeyFrame，于是把mbToBeErased置为true，表示已经擦除了，其实没有擦除
             {
                 mbToBeErased = true;
                 return;
             }
         }
+
+        for (map<KeyFrame *, int>::iterator mit = mConnectedKeyFrameWeights.begin(), mend = mConnectedKeyFrameWeights.end(); mit != mend; mit++)
+            mit->first->EraseConnection(this); // 让其它的KeyFrame删除与自己的联系
+
+        for (size_t i = 0; i < mvpMapPoints.size(); i++)
+            if (mvpMapPoints[i])
+                mvpMapPoints[i]->EraseObservation(this); // 让与自己有联系的MapPoint删除与自己的联系
+
+        {
+            unique_lock<mutex> lock(mMutexConnections);
+            unique_lock<mutex> lock1(mMutexFeatures);
+
+            // 清空自己与其它关键帧之间的联系
+            mConnectedKeyFrameWeights.clear();
+            mvpOrderedConnectedKeyFrames.clear();
+
+            // Update Spanning Tree
+            set<KeyFrame *> sParentCandidates;
+            sParentCandidates.insert(mpParent);
+
+            // Assign at each iteration one children with a parent (the pair with highest covisibility weight)
+            // Include that children as new parent candidate for the rest
+            // 如果这个关键帧有自己的孩子关键帧，告诉这些子关键帧，它们的父关键帧不行了，赶紧找新的父关键帧
+            while (!mspChildrens.empty())
+            {
+                bool bContinue = false;
+
+                int max = -1;
+                KeyFrame *pC;
+                KeyFrame *pP;
+
+                // 遍历每一个子关键帧，让它们更新它们指向的父关键帧
+                for (set<KeyFrame *>::iterator sit = mspChildrens.begin(), send = mspChildrens.end(); sit != send; sit++)
+                {
+                    KeyFrame *pKF = *sit;
+                    if (pKF->isBad())
+                        continue;
+
+                    // Check if a parent candidate is connected to the keyframe
+                    // 子关键帧遍历每一个与它相连的关键帧（共视关键帧）
+                    vector<KeyFrame *> vpConnected = pKF->GetVectorCovisibleKeyFrames();
+                    for (size_t i = 0, iend = vpConnected.size(); i < iend; i++)
+                    {
+                        for (set<KeyFrame *>::iterator spcit = sParentCandidates.begin(), spcend = sParentCandidates.end(); spcit != spcend; spcit++)
+                        {
+                            // 如果该帧的子节点和父节点（祖孙节点）之间存在连接关系（共视）
+                            // 举例：B-->A（B的父节点是A） C-->B（C的父节点是B） D--C（D与C相连） E--C（E与C相连） F--C（F与C相连） D-->A（D的父节点是A） E-->A（E的父节点是A）
+                            //      现在B挂了，于是C在与自己相连的D、E、F节点中找到父节点指向A的D
+                            //      此过程就是为了找到可以替换B的那个节点。
+                            // 上面例子中，B为当前要设置为SetBadFlag的关键帧
+                            //           A为spcit，也即sParentCandidates
+                            //           C为pKF,pC，也即mspChildrens中的一个
+                            //           D、E、F为vpConnected中的变量，由于C与D间的权重 比 C与E间的权重大，因此D为pP
+                            if (vpConnected[i]->mnID == (*spcit)->mnID)
+                            {
+                                int w = pKF->GetWeight(vpConnected[i]);
+                                if (w > max)
+                                {
+                                    pC = pKF;
+                                    pP = vpConnected[i];
+                                    max = w;
+                                    bContinue = true;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (bContinue)
+                {
+                    // 因为父节点死了，并且子节点找到了新的父节点，子节点更新自己的父节点
+                    pC->ChangeParent(pP);
+                    // 因为子节点找到了新的父节点并更新了父节点，那么该子节点升级，作为其它子节点的备选父节点
+                    sParentCandidates.insert(pC);
+                    // 该子节点处理完毕
+                    mspChildrens.erase(pC);
+                }
+                else
+                    break;
+            }
+
+            // If a children has no covisibility links with any parent candidate, assign to the original parent of this KF
+            // 如果还有子节点没有找到新的父节点
+            if (!mspChildrens.empty())
+                for (set<KeyFrame *>::iterator sit = mspChildrens.begin(); sit != mspChildrens.end(); sit++)
+                {
+                    // 直接把父节点的父节点作为自己的父节点
+                    (*sit)->ChangeParent(mpParent);
+                }
+
+            mpParent->EraseChild(this);
+            mTcp = Tcw * mpParent->GetPoseInverse();
+            mbBad = true;
+        }
+
+        mpMap->EraseKeyFrame(this);
+        mpKeyFrameDB->erase(this);
     }
 
     bool KeyFrame::isBad()
     {
         unique_lock<mutex> lock(mMutexConnections);
         return mbBad;
+    }
+
+    void KeyFrame::EraseConnection(KeyFrame *pKF)
+    {
+        bool bUpdate = false;
+        {
+            unique_lock<mutex> lock(mMutexConnections);
+            if (mConnectedKeyFrameWeights.count(pKF))
+            {
+                mConnectedKeyFrameWeights.erase(pKF);
+                bUpdate = true;
+            }
+        }
+
+        if (bUpdate)
+            UpdateBestCovisibles();
+    }
+
+    bool KeyFrame::IsInImage(const float &x, const float &y) const
+    {
+        return (x >= mnMinX && x < mnMaxX && y >= mnMinY && y < mnMaxY);
     }
 
     /**
@@ -366,10 +522,66 @@ namespace Goudan_SLAM
 
         // // 这个地方是不是应该：(!mbToBeErased)，(wubo???)
         // // SetBadFlag函数就是将mbToBeErased置为true，mbToBeErased就表示该KeyFrame被擦除了
-        // if(mbToBeErased)
-        // {
-        //     SetBadFlag();
-        // }
+        if (mbToBeErased)
+        {
+            SetBadFlag();
+        }
+    }
+
+    void KeyFrame::AddLoopEdge(KeyFrame *pKF)
+    {
+        unique_lock<mutex> lockCon(mMutexConnections);
+        mbNotErase = true;
+        mspLoopEdges.insert(pKF);
+    }
+
+    set<KeyFrame *> KeyFrame::GetLoopEdges()
+    {
+        unique_lock<mutex> lockCon(mMutexConnections);
+        return mspLoopEdges;
+    }
+
+    vector<size_t> KeyFrame::GetFeaturesInArea(const float &x, const float &y, const float &r) const
+    {
+        vector<size_t> vIndices;
+        vIndices.reserve(N);
+
+        // floor向下取整，mfGridElementWidthInv为每个像素占多少个格子
+        const int nMinCellX = max(0, (int)floor((x - mnMinX - r) * mfGridElementWidthInv));
+        if (nMinCellX >= mnGridCols)
+            return vIndices;
+
+        // ceil向上取整
+        const int nMaxCellX = min((int)mnGridCols - 1, (int)ceil((x - mnMinX + r) * mfGridElementWidthInv));
+        if (nMaxCellX < 0)
+            return vIndices;
+
+        const int nMinCellY = max(0, (int)floor((y - mnMinY - r) * mfGridElementHeightInv));
+        if (nMinCellY >= mnGridRows)
+            return vIndices;
+
+        const int nMaxCellY = min((int)mnGridRows - 1, (int)ceil((y - mnMinY + r) * mfGridElementHeightInv));
+        if (nMaxCellY < 0)
+            return vIndices;
+
+        for (int ix = nMinCellX; ix <= nMaxCellX; ix++)
+        {
+            for (int iy = nMinCellY; iy <= nMaxCellY; iy++)
+            {
+                const vector<size_t> vCell = mGrid[ix][iy];
+                for (size_t j = 0, jend = vCell.size(); j < jend; j++)
+                {
+                    const cv::KeyPoint &kpUn = mvKeysUn[vCell[j]];
+                    const float distx = kpUn.pt.x - x;
+                    const float disty = kpUn.pt.y - y;
+
+                    if (fabs(distx) < r && fabs(disty) < r)
+                        vIndices.push_back(vCell[j]);
+                }
+            }
+        }
+
+        return vIndices;
     }
 
     /**

@@ -22,7 +22,6 @@ namespace Goudan_SLAM
     {
     public:
         KeyFrame(Frame &F, Map *pMap, KeyFrameDatabase *pKFDB);
-        // KeyFrame(Frame &F, Map *pMap);
 
         // Pose functions
         void SetPose(const cv::Mat &Tcw);

@@ -347,7 +347,7 @@ namespace Goudan_SLAM
         }
     }
 
-    void static LocalBundleAdjustment(KeyFrame *pKF, bool *pbStopFlag, Map *pMap)
+    void Optimizer::LocalBundleAdjustment(KeyFrame *pKF, bool *pbStopFlag, Map *pMap)
     {
         // 用于LocalMapping线程的局部BA优化
 

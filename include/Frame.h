@@ -91,7 +91,7 @@ namespace Goudan_SLAM
         // mvKeys:原始左图像提取出的特征点（未校正）
         // mvKeysRight:原始右图像提取出的特征点（未校正）
         // mvKeysUn:校正mvKeys后的特征点，对于双目摄像头，一般得到的图像都是校正好的，再校正一次有点多余
-        std::vector<cv::KeyPoint> mvKeys, mvKeysRight;
+        std::vector<cv::KeyPoint> mvKeys;
         std::vector<cv::KeyPoint> mvKeysUn;
 
         // Bag of Words Vector structures.
@@ -100,7 +100,7 @@ namespace Goudan_SLAM
 
         // ORB descriptor, each row associated to a keypoint.
         // 左目摄像头和右目摄像头特征点对应的描述子
-        cv::Mat mDescriptors, mDescriptorsRight;
+        cv::Mat mDescriptors;
 
         // MapPoints associated to keypoints, NULL pointer if no association.
         // 每个特征点对应的MapPoint
@@ -149,7 +149,6 @@ namespace Goudan_SLAM
 
     private:
         // Undistort keypoints given OpenCV distortion parameters.
-        // Only for the RGB-D case. Stereo must be already rectified!
         // (called in the constructor).
         void UndistortKeyPoints();
 

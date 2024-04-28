@@ -129,6 +129,12 @@ namespace Goudan_SLAM
         mbAcceptKeyFrames = flag;
     }
 
+    bool LocalMapping::CheckFinish()
+    {
+        unique_lock<mutex> lock(mMutexFinish);
+        return mbFinishRequested;
+    }
+
     /**
      * @brief 处理列表中的关键帧
      *
@@ -448,6 +454,80 @@ namespace Goudan_SLAM
     }
 
     /**
+     * @brief 关键帧剔除
+     *
+     * 在Covisibility Graph中的关键帧，其90%以上的MapPoints能被其他关键帧（至少3个）观测到，则认为该关键帧为冗余关键帧。
+     * @see VI-E Local Keyframe Culling
+     */
+    void LocalMapping::KeyFrameCulling()
+    {
+        // 步骤1：根据Covisibility Graph提取当前帧的共视关键帧
+        vector<KeyFrame *> vpLocalKeyFrames = mpCurrentKeyFrame->GetVectorCovisibleKeyFrames();
+
+        // 对所有的局部关键帧进行遍历
+        for (vector<KeyFrame *>::iterator vit = vpLocalKeyFrames.begin(), vend = vpLocalKeyFrames.end(); vit != vend; vit++)
+        {
+            KeyFrame *pKF = *vit;
+            if (pKF->mnID == 0)
+                continue;
+            // 步骤2：提取每个共视关键帧的MapPoints
+            const vector<MapPoint *> vpMapPoints = pKF->GetMapPointMatches();
+
+            int nObs = 3;
+            const int thObs = nObs;
+            int nRedundantObservations = 0;
+            int nMPs = 0;
+
+            // 步骤3：遍历该局部关键帧的MapPoints，判断是否90%以上的MapPoints能被其它关键帧（至少3个）观测到
+            for (size_t i = 0, iend = vpMapPoints.size(); i < iend; i++)
+            {
+                MapPoint *pMP = vpMapPoints[i];
+                if (pMP)
+                {
+                    if (!pMP->isBad())
+                    {
+                        nMPs++;
+                        // MapPoints至少被三个关键帧观测到
+                        if (pMP->Observations() > thObs)
+                        {
+                            const int &scaleLevel = pKF->mvKeysUn[i].octave;
+                            const map<KeyFrame *, size_t> observations = pMP->GetObservations();
+                            // 判断该MapPoint是否同时被三个关键帧观测到
+                            int nObs = 0;
+                            for (map<KeyFrame *, size_t>::const_iterator mit = observations.begin(), mend = observations.end(); mit != mend; mit++)
+                            {
+                                KeyFrame *pKFi = mit->first;
+                                if (pKFi == pKF)
+                                    continue;
+                                const int &scaleLeveli = pKFi->mvKeysUn[mit->second].octave;
+
+                                // Scale Condition
+                                // 尺度约束，要求MapPoint在该局部关键帧的特征尺度大于（或近似于）其它关键帧的特征尺度
+                                if (scaleLeveli <= scaleLevel + 1)
+                                {
+                                    nObs++;
+                                    // 已经找到三个同尺度的关键帧可以观测到该MapPoint，不用继续找了
+                                    if (nObs >= thObs)
+                                        break;
+                                }
+                            }
+                            // 该MapPoint至少被三个关键帧观测到
+                            if (nObs >= thObs)
+                            {
+                                nRedundantObservations++;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 步骤4：该局部关键帧90%以上的MapPoints能被其它关键帧（至少3个）观测到，则认为是冗余关键帧
+            if (nRedundantObservations > 0.9 * nMPs)
+                pKF->SetBadFlag();
+        }
+    }
+
+    /**
      * 根据两关键帧的姿态计算两个关键帧之间的基本矩阵
      * @param  pKF1 关键帧1
      * @param  pKF2 关键帧2
@@ -479,6 +559,50 @@ namespace Goudan_SLAM
         return (cv::Mat_<float>(3, 3) << 0, -v.at<float>(2), v.at<float>(1),
                 v.at<float>(2), 0, -v.at<float>(0),
                 -v.at<float>(1), v.at<float>(0), 0);
+    }
+
+    void LocalMapping::RequestStop()
+    {
+        unique_lock<mutex> lock(mMutexStop);
+        mbStopRequested = true;
+        unique_lock<mutex> lock2(mMutexNewKFs);
+        mbAbortBA = true;
+    }
+
+    bool LocalMapping::Stop()
+    {
+        unique_lock<mutex> lock(mMutexStop);
+        if (mbStopRequested && !mbNotStop)
+        {
+            mbStopped = true;
+            cout << "Local Mapping STOP" << endl;
+            return true;
+        }
+
+        return false;
+    }
+
+    bool LocalMapping::isStopped()
+    {
+        unique_lock<mutex> lock(mMutexStop);
+        return mbStopped;
+    }
+
+    bool LocalMapping::stopRequested()
+    {
+        unique_lock<mutex> lock(mMutexStop);
+        return mbStopRequested;
+    }
+
+    void LocalMapping::ResetIfRequested()
+    {
+        unique_lock<mutex> lock(mMutexReset);
+        if (mbResetRequested)
+        {
+            mlNewKeyFrames.clear();
+            mlpRecentAddedMapPoints.clear();
+            mbResetRequested = false;
+        }
     }
 
     /**
