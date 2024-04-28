@@ -10,6 +10,7 @@
 #include "MapDrawer.h"
 #include "FrameDrawer.h"
 #include "Viewer.h"
+#include "LocalMapping.h"
 #include "KeyFrameDatabase.h"
 #include "ORBVocabulary.h"
 
@@ -20,6 +21,7 @@ namespace Goudan_SLAM{
     class Viewer;
     class FrameDrawer;
     class Map;
+    class LocalMapping;
 
     class System{
     public:
@@ -36,6 +38,8 @@ namespace Goudan_SLAM{
 
         Tracking* mpTracker;
 
+        LocalMapping* mpLocalMapper;
+
         Viewer* mpViewer;
 
         FrameDrawer* mpFrameDrawer;
@@ -43,6 +47,16 @@ namespace Goudan_SLAM{
 
 
         std::thread* mptViewer;
+        std::thread* mptLocalMapping;
+        
+        // Reset flag
+        std::mutex mMutexReset;
+        bool mbReset;
+
+        // Change mode flags
+        std::mutex mMutexMode;
+        bool mbActivateLocalizationMode;
+        bool mbDeactivateLocalizationMode;
     };
 }
 

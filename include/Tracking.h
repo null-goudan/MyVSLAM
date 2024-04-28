@@ -16,11 +16,16 @@
 #include "Initializer.h"
 #include "MapDrawer.h"
 #include "System.h"
+#include "LocalMapping.h"
 
 #include <mutex>
 
 namespace Goudan_SLAM{
+    class Viewer;
+    class FrameDrawer;
+    class Map;
     class System;
+    class LocalMapping;
     
     class Tracking{
     public:
@@ -29,6 +34,7 @@ namespace Goudan_SLAM{
         
         cv::Mat GrabImageMonocular(const cv::Mat &im, const double &timestamp);
 
+        void SetLocalMapper(LocalMapping* pLocalMapper);
         void SetViewer(Viewer* pViewer);
         // member
     public:
@@ -69,15 +75,16 @@ namespace Goudan_SLAM{
     protected:
         void Track();
 
-        void UpdateLastFrame();
-
         void MonocularInitialization();
         void CreateInitialMapMonocular();
 
+        void CheckReplacedInLastFrame();
         bool TrackReferenceKeyFrame();
+        void UpdateLastFrame();
         bool TrackWithMotionModel();
 
-        
+        bool Relocalization();
+
         void UpdateLocalMap();
         void UpdateLocalPoints();
         void UpdateLocalKeyFrames();
@@ -86,9 +93,13 @@ namespace Goudan_SLAM{
         void SearchLocalPoints();
 
         bool NeedNewKeyFrame();
-        // void CreateNewKeyFrame();
+        void CreateNewKeyFrame();
 
         bool mbVO;
+
+        //Other Thread Pointers
+        LocalMapping* mpLocalMapper;
+        // LoopClosing* mpLoopClosing;
 
         ORBExtractor* mpORBextractorLeft;
         ORBExtractor* mpIniORBextractor;

@@ -1,6 +1,7 @@
 #include "System.h"
-
+#include "Converter.h"
 #include <thread>
+#include <pangolin/pangolin.h>
 #include <iostream>
 #include <iomanip>
 
@@ -52,7 +53,8 @@ namespace Goudan_SLAM
                              mpMap, mpKeyFrameDatabase, strSettingsFile);
 
         // 初始化局部优化(局部地图) (Local Mapping) 线程并启动
-        // :TODO
+        mpLocalMapper = new LocalMapping(mpMap);
+        mptLocalMapping = new thread(&Goudan_SLAM::LocalMapping::Run,mpLocalMapper);
 
         // 初始化闭环检测(Loop Closing)线程并启动
         // :TODO
@@ -65,6 +67,9 @@ namespace Goudan_SLAM
         // cout <<"Viewer Running.............................." <<endl;
         // 设置一些必要的指针给对象
         mpTracker->SetViewer(mpViewer);
+        mpTracker->SetLocalMapper(mpLocalMapper);
+
+        mpLocalMapper->SetTracker(mpTracker);
     }
 
     cv::Mat System::TrackMonocular(const cv::Mat &im, const double &timestamp)

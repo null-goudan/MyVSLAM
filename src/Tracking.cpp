@@ -16,9 +16,9 @@ using namespace std;
 namespace Goudan_SLAM
 {
     Tracking::Tracking(System *pSys, ORBVocabulary *pVoc, FrameDrawer *pFrameDrawer, MapDrawer *pMapDrawer, Map *pMap, KeyFrameDatabase *pKFDB, const std::string &strSettingPath)
-        : mState(NO_IMAGES_YET), mpInitializer(static_cast<Initializer *>(NULL)), mpORBVocabulary(pVoc), mpViewer(NULL),
-          mpKeyFrameDB(pKFDB), mpSystem(pSys),
-          mpFrameDrawer(pFrameDrawer), mpMapDrawer(pMapDrawer), mpMap(pMap)
+        : mState(NO_IMAGES_YET), mbOnlyTracking(false), mbVO(false), mpORBVocabulary(pVoc),
+        mpKeyFrameDB(pKFDB), mpInitializer(static_cast<Initializer*>(NULL)), mpSystem(pSys), mpViewer(NULL),
+        mpFrameDrawer(pFrameDrawer), mpMapDrawer(pMapDrawer), mpMap(pMap), mnLastRelocFrameId(0)
     {
         cv::FileStorage fSettings(strSettingPath, cv::FileStorage::READ);
         float fx = fSettings["Camera.fx"];
@@ -104,6 +104,11 @@ namespace Goudan_SLAM
         cout << "- Scale Factor: " << fScaleFactor << endl;
         cout << "- Initial Fast Threshold: " << fIniThFAST << endl;
         cout << "- Minimum Fast Threshold: " << fMinThFAST << endl;
+    }
+
+    void Tracking::SetLocalMapper(LocalMapping *pLocalMapper)
+    {
+        mpLocalMapper=pLocalMapper;
     }
 
     cv::Mat Tracking::GrabImageMonocular(const cv::Mat &im, const double &timestamp)
@@ -370,12 +375,12 @@ namespace Goudan_SLAM
             // cout<<"Initialize matching.."<<endl;
             ORBmatcher matcher(0.9, true);
             int nmatches = matcher.SearchForInitialization(mInitialFrame, mCurrentFrame, mvbPrevMatched, mvIniMatches, 100);
-            cout << "inital matcher: num " << nmatches <<endl;
+            // cout << "inital matcher: num " << nmatches <<endl;
 
             // 4.初始化两帧之间的匹配点太少，重新初始化
             if (nmatches < 100)
             {
-                cout << "matcher point is less than 100: num " << nmatches << endl;
+                // cout << "matcher point is less than 100: num " << nmatches << endl;
                 delete mpInitializer;
                 mpInitializer = static_cast<Initializer *>(NULL);
                 return;
@@ -394,7 +399,7 @@ namespace Goudan_SLAM
                 {
                     if (mvIniMatches[i] >= 0 && !vbTriangulated[i])
                     {
-                        mvIniMatches[i] = 1;
+                        mvIniMatches[i] = -1;
                         nmatches--;
                     }
                 }
