@@ -312,7 +312,7 @@ namespace Goudan_SLAM
 
         // vector from LastFrame to CurrentFrame expressed in LastFrame
         const cv::Mat tlc = Rlw * twc + tlw; // Rlw*twc(w) = twc(l), twc(l) + tlw(l) = tlc(l)
-
+        
         for (int i = 0; i < LastFrame.N; i++)
         {
             MapPoint *pMP = LastFrame.mvpMapPoints[i];
@@ -351,10 +351,7 @@ namespace Goudan_SLAM
                     // NOTE 尺度越大,图像越小
                     // 以下可以这么理解，例如一个有一定面积的圆点，在某个尺度n下它是一个特征点
                     // 当前进时，圆点的面积增大，在某个尺度m下它是一个特征点，由于面积增大，则需要在更高的尺度下才能检测出来
-                    // 因此m>=n，对应前进的情况，nCurOctave>=nLastOctave。后退的情况可以类推
                     vIndices2 = CurrentFrame.GetFeaturesInArea(u, v, radius, nLastOctave - 1, nLastOctave + 1);
-
-                    cout << "[Project match] : vIndices size:" << vIndices2.size() << endl;
 
                     if (vIndices2.empty())
                         continue;
@@ -837,7 +834,7 @@ namespace Goudan_SLAM
                 // 基于卡方检验计算出的阈值（假设测量有一个像素的偏差）
                 if (e2 * pKF->mvInvLevelSigma2[kpLevel] > 5.99)
                     continue;
-                
+
                 const cv::Mat &dKF = pKF->mDescriptors.row(idx);
 
                 const int dist = DescriptorDistance(dMP, dKF);

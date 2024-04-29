@@ -37,8 +37,8 @@ namespace Goudan_SLAM
         for (size_t i = 0, iend = vpMPs.size(); i < iend; i++)
         {
             // 不包括ReferenceMapPoints（局部地图点）
-            // if (vpMPs[i]->isBad() || spRefMPs.count(vpMPs[i]))
-            //     continue;
+            if (vpMPs[i]->isBad() || spRefMPs.count(vpMPs[i]))
+                continue;
             cv::Mat pos = vpMPs[i]->GetWorldPos();
             glVertex3f(pos.at<float>(0), pos.at<float>(1), pos.at<float>(2));
         }
@@ -52,8 +52,8 @@ namespace Goudan_SLAM
 
         for (set<MapPoint *>::iterator sit = spRefMPs.begin(), send = spRefMPs.end(); sit != send; sit++)
         {
-            // if ((*sit)->isBad())
-            //     continue;
+            if ((*sit)->isBad())
+                continue;
             cv::Mat pos = (*sit)->GetWorldPos();
             glVertex3f(pos.at<float>(0), pos.at<float>(1), pos.at<float>(2));
         }
@@ -121,59 +121,59 @@ namespace Goudan_SLAM
 
         // 步骤3：显示所有关键帧的Essential Graph
         // 通过显示界面选择是否显示关键帧连接关系
-        // if (bDrawGraph)
-        // {
-        //     // 设置绘制图形时线的宽度
-        //     glLineWidth(mGraphLineWidth);
-        //     // 设置共视图连接线为绿色，透明度为0.6f
-        //     glColor4f(0.0f, 1.0f, 0.0f, 0.6f);
-        //     glBegin(GL_LINES);
+        if (bDrawGraph)
+        {
+            // 设置绘制图形时线的宽度
+            glLineWidth(mGraphLineWidth);
+            // 设置共视图连接线为绿色，透明度为0.6f
+            glColor4f(0.0f, 1.0f, 0.0f, 0.6f);
+            glBegin(GL_LINES);
 
-        //     for (size_t i = 0; i < vpKFs.size(); i++)
-        //     {
-        //         // Covisibility Graph
-        //         // 步骤3.1 共视程度比较高的共视关键帧用线连接
-        //         // 遍历每一个关键帧，得到它们共视程度比较高的关键帧
-        //         // const vector<KeyFrame *> vCovKFs = vpKFs[i]->GetCovisiblesByWeight(100);
-        //         // 遍历每一个关键帧，得到它在世界坐标系下的相机坐标
-        //         cv::Mat Ow = vpKFs[i]->GetCameraCenter();
-        //         // if (!vCovKFs.empty())
-        //         {
-        //             for (vector<KeyFrame *>::const_iterator vit = vCovKFs.begin(), vend = vCovKFs.end(); vit != vend; vit++)
-        //             {
-        //                 if ((*vit)->mnID < vpKFs[i]->mnID)
-        //                     continue;
-        //                 cv::Mat Ow2 = (*vit)->GetCameraCenter();
-        //                 glVertex3f(Ow.at<float>(0), Ow.at<float>(1), Ow.at<float>(2));
-        //                 glVertex3f(Ow2.at<float>(0), Ow2.at<float>(1), Ow2.at<float>(2));
-        //             }
-        //         }
+            for (size_t i = 0; i < vpKFs.size(); i++)
+            {
+                // Covisibility Graph
+                // 步骤3.1 共视程度比较高的共视关键帧用线连接
+                // 遍历每一个关键帧，得到它们共视程度比较高的关键帧
+                const vector<KeyFrame *> vCovKFs = vpKFs[i]->GetCovisiblesByWeight(100);
+                // 遍历每一个关键帧，得到它在世界坐标系下的相机坐标
+                cv::Mat Ow = vpKFs[i]->GetCameraCenter();
+                if (!vCovKFs.empty())
+                {
+                    for (vector<KeyFrame *>::const_iterator vit = vCovKFs.begin(), vend = vCovKFs.end(); vit != vend; vit++)
+                    {
+                        if ((*vit)->mnID < vpKFs[i]->mnID)
+                            continue;
+                        cv::Mat Ow2 = (*vit)->GetCameraCenter();
+                        glVertex3f(Ow.at<float>(0), Ow.at<float>(1), Ow.at<float>(2));
+                        glVertex3f(Ow2.at<float>(0), Ow2.at<float>(1), Ow2.at<float>(2));
+                    }
+                }
 
-        //         // Spanning tree
-        //         // 步骤3.2 连接最小生成树
-        //         KeyFrame *pParent = vpKFs[i]->GetParent();
-        //         if (pParent)
-        //         {
-        //             cv::Mat Owp = pParent->GetCameraCenter();
-        //             glVertex3f(Ow.at<float>(0), Ow.at<float>(1), Ow.at<float>(2));
-        //             glVertex3f(Owp.at<float>(0), Owp.at<float>(1), Owp.at<float>(2));
-        //         }
+                // Spanning tree
+                // 步骤3.2 连接最小生成树
+                KeyFrame *pParent = vpKFs[i]->GetParent();
+                if (pParent)
+                {
+                    cv::Mat Owp = pParent->GetCameraCenter();
+                    glVertex3f(Ow.at<float>(0), Ow.at<float>(1), Ow.at<float>(2));
+                    glVertex3f(Owp.at<float>(0), Owp.at<float>(1), Owp.at<float>(2));
+                }
 
-        //         // Loops
-        //         // 步骤3.3 连接闭环时形成的连接关系
-        //         set<KeyFrame *> sLoopKFs = vpKFs[i]->GetLoopEdges();
-        //         for (set<KeyFrame *>::iterator sit = sLoopKFs.begin(), send = sLoopKFs.end(); sit != send; sit++)
-        //         {
-        //             if ((*sit)->mnID < vpKFs[i]->mnID)
-        //                 continue;
-        //             cv::Mat Owl = (*sit)->GetCameraCenter();
-        //             glVertex3f(Ow.at<float>(0), Ow.at<float>(1), Ow.at<float>(2));
-        //             glVertex3f(Owl.at<float>(0), Owl.at<float>(1), Owl.at<float>(2));
-        //         }
-        //     }
+                // Loops
+                // 步骤3.3 连接闭环时形成的连接关系
+                set<KeyFrame *> sLoopKFs = vpKFs[i]->GetLoopEdges();
+                for (set<KeyFrame *>::iterator sit = sLoopKFs.begin(), send = sLoopKFs.end(); sit != send; sit++)
+                {
+                    if ((*sit)->mnID < vpKFs[i]->mnID)
+                        continue;
+                    cv::Mat Owl = (*sit)->GetCameraCenter();
+                    glVertex3f(Ow.at<float>(0), Ow.at<float>(1), Ow.at<float>(2));
+                    glVertex3f(Owl.at<float>(0), Owl.at<float>(1), Owl.at<float>(2));
+                }
+            }
 
-        //     glEnd();
-        // }
+            glEnd();
+        }
     }
 
     // 关于gl相关的函数，可直接google, 并加上msdn关键词

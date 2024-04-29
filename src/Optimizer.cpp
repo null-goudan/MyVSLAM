@@ -355,7 +355,7 @@ namespace Goudan_SLAM
 
         // 1. 将当前关键帧加入lLocalKeyFrames;
         lLocalKeyFrames.push_back(pKF);
-        pKF->mnBAGlobalForKF = pKF->mnID;
+        pKF->mnBALocalForKF = pKF->mnID;
 
         // 2. 找到关键帧连接的关键帧(一级相连)， 加入lLocalKeyFrames中
         const vector<KeyFrame *> vNeighKFs = pKF->GetVectorCovisibleKeyFrames();
@@ -421,8 +421,7 @@ namespace Goudan_SLAM
             optimizer.setForceStopFlag(pbStopFlag);
 
         unsigned long maxKFid = 0;
-
-        // 6. 添加顶点: Pose of Local KeyFrame
+        // 步骤6：添加顶点：Pose of Local KeyFrame
         for (list<KeyFrame *>::iterator lit = lLocalKeyFrames.begin(), lend = lLocalKeyFrames.end(); lit != lend; lit++)
         {
             KeyFrame *pKFi = *lit;
@@ -435,7 +434,8 @@ namespace Goudan_SLAM
                 maxKFid = pKFi->mnID;
         }
 
-        // 7. 添加顶点 Pose of Fixed KeyFrame, 这里调用了vSE3->setFixed(true)
+        // Set Fixed KeyFrame vertices
+        // 步骤7：添加顶点：Pose of Fixed KeyFrame，注意这里调用了vSE3->setFixed(true)。
         for (list<KeyFrame *>::iterator lit = lFixedCameras.begin(), lend = lFixedCameras.end(); lit != lend; lit++)
         {
             KeyFrame *pKFi = *lit;
@@ -571,6 +571,7 @@ namespace Goudan_SLAM
             }
         }
 
+        // Get Map Mutex
         unique_lock<mutex> lock(pMap->mMutexMapUpdate);
 
         // 连接偏差比较大，在关键帧中剔除对该MapPoint的观测
@@ -586,7 +587,10 @@ namespace Goudan_SLAM
             }
         }
 
-        // 14.优化后更新关键帧位姿以及MapPoints的位置、平均观测方向等属性
+        // Recover optimized data
+        // 步骤13：优化后更新关键帧位姿以及MapPoints的位置、平均观测方向等属性
+
+        // Keyframes
         for (list<KeyFrame *>::iterator lit = lLocalKeyFrames.begin(), lend = lLocalKeyFrames.end(); lit != lend; lit++)
         {
             KeyFrame *pKF = *lit;

@@ -703,4 +703,21 @@ namespace Goudan_SLAM
         mpCurrentKeyFrame->UpdateConnections();
     }
 
+    bool LocalMapping::SetNotStop(bool flag)
+    {
+        unique_lock<mutex> lock(mMutexStop);
+
+        if (flag && mbStopped)
+            return false;
+
+        mbNotStop = flag;
+
+        return true;
+    }
+
+    void LocalMapping::InterruptBA()
+    {
+        mbAbortBA = true;
+    }
+
 }

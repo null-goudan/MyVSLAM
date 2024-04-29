@@ -70,15 +70,6 @@ namespace Goudan_SLAM
         mvpKeyFrameOrigins.clear();
     }
 
-    void Map::EraseMapPoint(MapPoint *pMP)
-    {
-        unique_lock<mutex> lock(mMutexMap);
-        mspMapPoints.erase(pMP);
-
-        // TODO: This only erase the pointer.
-        // Delete the MapPoint
-    }
-
     void Map::EraseKeyFrame(KeyFrame *pKF)
     {
         unique_lock<mutex> lock(mMutexMap);
@@ -92,6 +83,15 @@ namespace Goudan_SLAM
     {
         unique_lock<mutex> lock(mMutexMap);
         mspMapPoints.insert(pMP);
+    }
+
+    void Map::EraseMapPoint(MapPoint *pMP)
+    {
+        unique_lock<mutex> lock(mMutexMap);
+        mspMapPoints.erase(pMP);
+
+        // TODO: This only erase the pointer.
+        // Delete the MapPoint
     }
 
 } // namespace Goudan_SLAM

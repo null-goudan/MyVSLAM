@@ -7,23 +7,25 @@
 
 #include <mutex>
 
-namespace Goudan_SLAM{
+namespace Goudan_SLAM
+{
     class MapPoint;
     class KeyFrame;
 
-    class Map{
+    class Map
+    {
     public:
         Map();
 
         void AddKeyFrame(KeyFrame *pKF);
         void AddMapPoint(MapPoint *pMP);
-        void EraseMapPoint(MapPoint* pMP);
-        void EraseKeyFrame(KeyFrame* pKF);
-        void SetReferenceMapPoints(const std::vector<MapPoint*> &vpMPs);
+        void EraseMapPoint(MapPoint *pMP);
+        void EraseKeyFrame(KeyFrame *pKF);
+        void SetReferenceMapPoints(const std::vector<MapPoint *> &vpMPs);
 
-        std::vector<KeyFrame*> GetAllKeyFrames();
-        std::vector<MapPoint*> GetAllMapPoints();
-        std::vector<MapPoint*> GetReferenceMapPoints();
+        std::vector<KeyFrame *> GetAllKeyFrames();
+        std::vector<MapPoint *> GetAllMapPoints();
+        std::vector<MapPoint *> GetReferenceMapPoints();
 
         long unsigned int MapPointsInMap();
         long unsigned KeyFramesInMap();
@@ -32,18 +34,19 @@ namespace Goudan_SLAM{
 
         void clear();
 
-        std::vector<KeyFrame* > mvpKeyFrameOrigins;
-        
+        vector<KeyFrame *> mvpKeyFrameOrigins;
+
         std::mutex mMutexMapUpdate;
         std::mutex mMutexPointCreation;
 
     protected:
-        std::set<MapPoint*> mspMapPoints;
-        std::set<KeyFrame*> mspKeyFrames;
+        std::set<MapPoint *> mspMapPoints; ///< MapPoints
+        std::set<KeyFrame *> mspKeyFrames; ///< Keyframs
 
-        std::vector<MapPoint*> mvpReferenceMapPoints;
+        std::vector<MapPoint *> mvpReferenceMapPoints;
 
         long unsigned int mnMaxKFid;
+
         std::mutex mMutexMap;
     };
 }

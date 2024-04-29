@@ -75,7 +75,7 @@ namespace Goudan_SLAM
         cv::namedWindow("Goudan-SLAM: Current Frame");
 
         bool bFollow = true;
-        // bool bLocalizationMode = false;
+        bool bLocalizationMode = false;
 
         // cout << "------ Start Show viewer -----" <<endl;
         while (1)
@@ -104,16 +104,16 @@ namespace Goudan_SLAM
                 bFollow = false;
             }
 
-            // if (menuLocalizationMode && !bLocalizationMode)
-            // {
-            //     mpSystem->ActivateLocalizationMode();
-            //     bLocalizationMode = true;
-            // }
-            // else if (!menuLocalizationMode && bLocalizationMode)
-            // {
-            //     mpSystem->DeactivateLocalizationMode();
-            //     bLocalizationMode = false;
-            // }
+            if (menuLocalizationMode && !bLocalizationMode)
+            {
+                // mpSystem->ActivateLocalizationMode();
+                bLocalizationMode = true;
+            }
+            else if (!menuLocalizationMode && bLocalizationMode)
+            {
+                // mpSystem->DeactivateLocalizationMode();
+                bLocalizationMode = false;
+            }
 
             d_cam.Activate(s_cam);
             // 步骤3：绘制地图和图像
@@ -137,8 +137,8 @@ namespace Goudan_SLAM
             //     menuShowKeyFrames = true;
             //     menuShowPoints = true;
             //     menuLocalizationMode = false;
-            //     // if (bLocalizationMode)
-            //     //     mpSystem->DeactivateLocalizationMode();
+            //     if (bLocalizationMode)
+            //         mpSystem->DeactivateLocalizationMode();
             //     bLocalizationMode = false;
             //     bFollow = true;
             //     menuFollowCamera = true;
