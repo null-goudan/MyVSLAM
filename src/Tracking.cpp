@@ -180,7 +180,7 @@ namespace Goudan_SLAM
                     // 2.1 跟踪上一帧或者参考帧或者重定位
                     // 运动模型是空的或刚完成重定位  (重定位未做)  :TODO
                     // 只要mVelocity不为空就选择TrackWithMotionModel
-                    if (mVelocity.empty() || mCurrentFrame.mnId<mnLastRelocFrameId+2)
+                    if (mVelocity.empty() || mCurrentFrame.mnId < mnLastRelocFrameId + 2)
                     {
                         // 将上一帧的位姿作为当前帧的初始位姿
                         // 通过BoW的方式在参考帧中找当前帧特征点的匹配点
@@ -304,7 +304,7 @@ namespace Goudan_SLAM
         if (!mCurrentFrame.mTcw.empty())
         {
             // 计算相对姿态T_currentFrame_referenceKeyFrame
-            cv::Mat Tcr = mCurrentFrame.mTcw * mCurrentFrame.mpReferenceKF->GetPose();
+            cv::Mat Tcr = mCurrentFrame.mTcw * mCurrentFrame.mpReferenceKF->GetPoseInverse();
             mlRelativeFramePoses.push_back(Tcr);
             mlpReferences.push_back(mpReferenceKF);
             mlFrameTimes.push_back(mCurrentFrame.mTimeStamp);
@@ -608,6 +608,7 @@ namespace Goudan_SLAM
         // 如果跟踪的点少，则扩大搜索半径再来一次
         if (nmatches < 20)
         {
+            cout << "less than 20 nmatches TrackWithMotionModel!" << endl;
             fill(mCurrentFrame.mvpMapPoints.begin(), mCurrentFrame.mvpMapPoints.end(), static_cast<MapPoint *>(NULL));
             nmatches = matcher.SearchByProjection(mCurrentFrame, mLastFrame, 2 * th); // 2*th
         }
@@ -754,14 +755,11 @@ namespace Goudan_SLAM
         // Condition 1b: More than "MinFrames" have passed and Local Mapping is idle
         // localMapper处于空闲状态
         const bool c1b = (mCurrentFrame.mnId >= mnLastKeyFrameId + mMinFrames && bLocalMappingIdle);
-        // Condition 1c: tracking is weak
-        // 跟踪要跪的节奏，0.25和0.3是一个比较低的阈值
-        const bool c1c = false;
         // Condition 2: Few tracked points compared to reference keyframe. Lots of visual odometry compared to map matches.
         // 阈值比c1c要高，与之前参考帧（最近的一个关键帧）重复度不是太高
         const bool c2 = ((mnMatchesInliers < nRefMatches * thRefRatio || ratioMap < thMapRatio) && mnMatchesInliers > 15);
 
-        if ((c1a || c1b || c1c) && c2)
+        if ((c1a || c1b ) && c2)
         {
             if (bLocalMappingIdle)
             {
@@ -800,6 +798,8 @@ namespace Goudan_SLAM
 
         mnLastKeyFrameId = mCurrentFrame.mnId;
         mpLastKeyFrame = pKF;
+
+        cout << "Create KeyFrame : id " << pKF->mnID << endl;
     }
 
     void Tracking::UpdateLocalMap()

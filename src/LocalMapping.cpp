@@ -6,8 +6,9 @@
 
 namespace Goudan_SLAM
 {
-    LocalMapping::LocalMapping(Map *pMap) : mbResetRequested(false), mbFinishRequested(false), mbFinished(true), mpMap(pMap),
-                                            mbAbortBA(false), mbStopped(false), mbStopRequested(false), mbNotStop(false), mbAcceptKeyFrames(true)
+    LocalMapping::LocalMapping(Map *pMap) 
+    : mbResetRequested(false), mbFinishRequested(false), mbFinished(true), mpMap(pMap),
+     mbAbortBA(false), mbStopped(false), mbStopRequested(false), mbNotStop(false), mbAcceptKeyFrames(true)
     {
     }
 
