@@ -1,5 +1,6 @@
 #include "FrameDrawer.h"
 #include "Tracking.h"
+
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 
@@ -7,16 +8,17 @@
 
 namespace Goudan_SLAM
 {
+
     FrameDrawer::FrameDrawer(Map *pMap) : mpMap(pMap)
     {
         mState = Tracking::SYSTEM_NOT_READY;
-
         // 初始化图像显示画布
-        //  包括：图像、特征点连线形成的规矩(初始化时)、 框(跟踪时的MapPoint)、圈（跟踪时的特征点）
-        //  固定画布大小640*480
+        // 包括：图像、特征点连线形成的轨迹（初始化时）、框（跟踪时的MapPoint）、圈（跟踪时的特征点）
+        // ！！！固定画布大小为640*480
         mIm = cv::Mat(480, 640, CV_8UC3, cv::Scalar(0, 0, 0));
     }
 
+    // 准备需要显示的信息，包括图像、特征点、地图、跟踪状态
     cv::Mat FrameDrawer::DrawFrame()
     {
         cv::Mat im;
@@ -24,17 +26,18 @@ namespace Goudan_SLAM
         vector<int> vMatches;              // Initialization: correspondeces with reference keypoints
         vector<cv::KeyPoint> vCurrentKeys; // KeyPoints in current frame
         vector<bool> vbVO, vbMap;          // Tracked MapPoints in current frame
+        int state;                         // Tracking state
 
-        int state; // Tracking state
-
-        // 1. 将成员变量赋值给局部变量
-        // 加互斥锁 避免与 FrareDrawer:: Updatea 函数中图像拷贝发生冲突
+        // Copy variables within scoped mutex
+        //  步骤1：将成员变量赋值给局部变量（包括图像、状态、其它的提示）
+        //  加互斥锁，避免与FrameDrawer::Update函数中图像拷贝发生冲突
         {
             unique_lock<mutex> lock(mMutex);
             state = mState;
             if (mState == Tracking::SYSTEM_NOT_READY)
                 mState = Tracking::NO_IMAGES_YET;
 
+            // 这里使用copyTo进行深拷贝是因为后面会把单通道灰度图像转为3通道图像
             mIm.copyTo(im);
 
             if (mState == Tracking::NOT_INITIALIZED)
@@ -53,20 +56,22 @@ namespace Goudan_SLAM
             {
                 vCurrentKeys = mvCurrentKeys;
             }
-        } // release mutex
+        } // destroy scoped mutex -> release mutex
 
-        if (im.channels() < 3)
+        if (im.channels() < 3) // this should be always true
             cvtColor(im, im, CV_GRAY2BGR);
 
         // Draw
-        // 2. 绘制初始化轨迹连线，绘制特征点边框（特征点用小框圈住）
-        if (state == Tracking::NOT_INITIALIZED)
+        //  步骤2：绘制初始化轨迹连线，绘制特征点边框（特征点用小框圈住）
+        //  步骤2.1：初始化时，当前帧的特征坐标与初始帧的特征点坐标连成线，形成轨迹
+        if (state == Tracking::NOT_INITIALIZED) // INITIALIZING
         {
             for (unsigned int i = 0; i < vMatches.size(); i++)
             {
                 if (vMatches[i] >= 0)
                 {
-                    cv::line(im, vIniKeys[i].pt, vCurrentKeys[vMatches[i]].pt, cv::Scalar(0, 255, 0));
+                    cv::line(im, vIniKeys[i].pt, vCurrentKeys[vMatches[i]].pt,
+                             cv::Scalar(0, 255, 0));
                 }
             }
         }
@@ -107,13 +112,13 @@ namespace Goudan_SLAM
                     }
                 }
             }
-        } // else
+        }
 
         cv::Mat imWithInfo;
         DrawTextInfo(im, state, imWithInfo);
 
         return imWithInfo;
-    } // DrawFrame
+    }
 
     void FrameDrawer::DrawTextInfo(cv::Mat &im, int nState, cv::Mat &imText)
     {
@@ -156,7 +161,7 @@ namespace Goudan_SLAM
     void FrameDrawer::Update(Tracking *pTracker)
     {
         unique_lock<mutex> lock(mMutex);
-        // 拷贝线程的图像
+        // 拷贝跟踪线程的图像
         pTracker->mImGray.copyTo(mIm);
         // 拷贝跟踪线程的特征点
         mvCurrentKeys = pTracker->mCurrentFrame.mvKeys;
@@ -181,9 +186,9 @@ namespace Goudan_SLAM
                     if (!pTracker->mCurrentFrame.mvbOutlier[i])
                     {
                         // 该mappoints可以被多帧观测到，则为有效的地图点
-                        // if (pMP->Observations() > 0)
+                        if (pMP->Observations() > 0)
                             mvbMap[i] = true;
-                        // else
+                        else
                             mvbVO[i] = true;
                     }
                 }
@@ -191,4 +196,5 @@ namespace Goudan_SLAM
         }
         mState = static_cast<int>(pTracker->mLastProcessedState);
     }
+
 } // namespace Goudan_SLAM

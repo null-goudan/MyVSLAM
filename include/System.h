@@ -11,6 +11,7 @@
 #include "FrameDrawer.h"
 #include "Viewer.h"
 #include "LocalMapping.h"
+#include "LoopClosing.h"
 #include "KeyFrameDatabase.h"
 #include "ORBVocabulary.h"
 
@@ -23,6 +24,7 @@ namespace Goudan_SLAM
     class FrameDrawer;
     class Map;
     class LocalMapping;
+    class LoopClosing;
 
     class System
     {
@@ -39,6 +41,8 @@ namespace Goudan_SLAM
 
         void Reset();
 
+        void Shutdown();
+
         void SaveTrajectoryKITTI(const string &filename);
 
     private:
@@ -51,12 +55,15 @@ namespace Goudan_SLAM
 
         LocalMapping *mpLocalMapper;
 
+        LoopClosing* mpLoopCloser;
+
         Viewer *mpViewer;
 
         FrameDrawer *mpFrameDrawer;
         MapDrawer *mpMapDrawer;
 
         std::thread *mptViewer;
+        std::thread* mptLoopClosing;
         std::thread *mptLocalMapping;
 
         // Reset flag

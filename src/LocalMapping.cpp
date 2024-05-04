@@ -13,6 +13,11 @@ namespace Goudan_SLAM
     {
     }
 
+    void LocalMapping::SetLoopCloser(LoopClosing *pLoopCloser)
+    {
+        mpLoopCloser = pLoopCloser;
+    }
+
     void LocalMapping::SetTracker(Tracking *pTracker)
     {
         mpTracker = pTracker;
@@ -80,7 +85,7 @@ namespace Goudan_SLAM
                 }
 
                 // 将当前帧加入到闭环检测队列中
-                // mpLoopCloser->InsertKeyFrame(mpCurrentKeyFrame);
+                mpLoopCloser->InsertKeyFrame(mpCurrentKeyFrame);
             }
             else if (Stop())
             {

@@ -5,43 +5,49 @@
 #include "MapPoint.h"
 #include "Map.h"
 
-#include <opencv2/core/core.hpp>
-#include <opencv2/features2d/features2d.hpp>
+#include<opencv2/core/core.hpp>
+#include<opencv2/features2d/features2d.hpp>
 
-#include <mutex>
+#include<mutex>
 
-namespace Goudan_SLAM{
-    class Tracking;
-    class Viewer;
 
-    class FrameDrawer
-    {
-    public:
-        FrameDrawer(Map *pMap);
+namespace Goudan_SLAM
+{
 
-        // 从上一个被处理的帧更新信息
-        void Update(Tracking *pTracker);
-        cv::Mat DrawFrame(); // 绘制最后一个处理的帧
-    
-    protected:
+class Tracking;
+class Viewer;
 
-        void DrawTextInfo(cv::Mat &im, int nState, cv::Mat &imText);
+class FrameDrawer
+{
+public:
+    FrameDrawer(Map* pMap);
 
-        // 某帧需要绘图的信息
-        cv::Mat mIm;
-        int N;
-        vector<cv::KeyPoint> mvCurrentKeys;
-        vector<bool> mvbMap, mvbVO;
-        bool mbOnlyTracking;
-        int mnTracked, mnTrackedVO;
-        vector<cv::KeyPoint> mvIniKeys;
-        vector<int> mvIniMatches;
-        int mState;
-        
-        Map* mpMap;
+    // Update info from the last processed frame.
+    void Update(Tracking *pTracker);
 
-        std::mutex mMutex;
-    };
-}
+    // Draw last processed frame.
+    cv::Mat DrawFrame();
 
-#endif
+protected:
+
+    void DrawTextInfo(cv::Mat &im, int nState, cv::Mat &imText);
+
+    // Info of the frame to be drawn
+    cv::Mat mIm;
+    int N;
+    vector<cv::KeyPoint> mvCurrentKeys;
+    vector<bool> mvbMap, mvbVO;
+    bool mbOnlyTracking;
+    int mnTracked, mnTrackedVO;
+    vector<cv::KeyPoint> mvIniKeys;
+    vector<int> mvIniMatches;
+    int mState;
+
+    Map* mpMap;
+
+    std::mutex mMutex;
+};
+
+} //namespace Goudan_SLAM
+
+#endif // FRAMEDRAWER_H

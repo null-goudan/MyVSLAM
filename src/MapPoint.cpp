@@ -1,27 +1,47 @@
+/**
+ * This file is part of ORB-SLAM2.
+ *
+ * Copyright (C) 2014-2016 Raúl Mur-Artal <raulmur at unizar dot es> (University of Zaragoza)
+ * For more information see <https://github.com/raulmur/ORB_SLAM2>
+ *
+ * ORB-SLAM2 is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * ORB-SLAM2 is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with ORB-SLAM2. If not, see <http://www.gnu.org/licenses/>.
+ */
+
 #include "MapPoint.h"
+#include "ORBmatcher.h"
 
 #include <mutex>
-#include <map>
-#include "ORBmatcher.h"
 
 namespace Goudan_SLAM
 {
+
     long unsigned int MapPoint::nNextId = 0;
     mutex MapPoint::mGlobalMutex;
 
     /**
      * @brief 给定坐标与keyframe构造MapPoint
      *
-     * CreateInitialMapMonocular()，LocalMapping::CreateNewMapPoints()
+     * 双目：StereoInitialization()，CreateNewKeyFrame()，LocalMapping::CreateNewMapPoints()
+     * 单目：CreateInitialMapMonocular()，LocalMapping::CreateNewMapPoints()
      * @param Pos    MapPoint的坐标（wrt世界坐标系）
      * @param pRefKF KeyFrame
      * @param pMap   Map
      */
-    MapPoint::MapPoint(const cv::Mat &Pos, KeyFrame *pRefKF, Map *pMap)
-        : mnFirstKFid(pRefKF->mnId), mnFirstFrame(pRefKF->mnFrameId), nObs(0), mnTrackReferenceForFrame(0),
-          mnLastFrameSeen(0), mnBALocalForKF(0), mnFuseCandidateForKF(0), mnLoopPointForKF(0), mnCorrectedByKF(0),
-          mnCorrectedReference(0), mnBAGlobalForKF(0), mpRefKF(pRefKF), mnVisible(1), mnFound(1), mbBad(false),
-          mpReplaced(static_cast<MapPoint *>(NULL)), mfMinDistance(0), mfMaxDistance(0), mpMap(pMap)
+    MapPoint::MapPoint(const cv::Mat &Pos, KeyFrame *pRefKF, Map *pMap) : mnFirstKFid(pRefKF->mnId), mnFirstFrame(pRefKF->mnFrameId), nObs(0), mnTrackReferenceForFrame(0),
+                                                                          mnLastFrameSeen(0), mnBALocalForKF(0), mnFuseCandidateForKF(0), mnLoopPointForKF(0), mnCorrectedByKF(0),
+                                                                          mnCorrectedReference(0), mnBAGlobalForKF(0), mpRefKF(pRefKF), mnVisible(1), mnFound(1), mbBad(false),
+                                                                          mpReplaced(static_cast<MapPoint *>(NULL)), mfMinDistance(0), mfMaxDistance(0), mpMap(pMap)
     {
         Pos.copyTo(mWorldPos);
         mNormalVector = cv::Mat::zeros(3, 1, CV_32F);
@@ -34,16 +54,16 @@ namespace Goudan_SLAM
     /**
      * @brief 给定坐标与frame构造MapPoint
      *
+     * 双目：UpdateLastFrame()
      * @param Pos    MapPoint的坐标（wrt世界坐标系）
      * @param pMap   Map
      * @param pFrame Frame
      * @param idxF   MapPoint在Frame中的索引，即对应的特征点的编号
      */
-    MapPoint::MapPoint(const cv::Mat &Pos, Map *pMap, Frame *pFrame, const int &idxF)
-        : mnFirstKFid(-1), mnFirstFrame(pFrame->mnId), nObs(0), mnTrackReferenceForFrame(0), mnLastFrameSeen(0),
-          mnBALocalForKF(0), mnFuseCandidateForKF(0), mnLoopPointForKF(0), mnCorrectedByKF(0),
-          mnCorrectedReference(0), mnBAGlobalForKF(0), mpRefKF(static_cast<KeyFrame *>(NULL)), mnVisible(1),
-          mnFound(1), mbBad(false), mpReplaced(NULL), mpMap(pMap)
+    MapPoint::MapPoint(const cv::Mat &Pos, Map *pMap, Frame *pFrame, const int &idxF) : mnFirstKFid(-1), mnFirstFrame(pFrame->mnId), nObs(0), mnTrackReferenceForFrame(0), mnLastFrameSeen(0),
+                                                                                        mnBALocalForKF(0), mnFuseCandidateForKF(0), mnLoopPointForKF(0), mnCorrectedByKF(0),
+                                                                                        mnCorrectedReference(0), mnBAGlobalForKF(0), mpRefKF(static_cast<KeyFrame *>(NULL)), mnVisible(1),
+                                                                                        mnFound(1), mbBad(false), mpReplaced(NULL), mpMap(pMap)
     {
         Pos.copyTo(mWorldPos);
         cv::Mat Ow = pFrame->GetCameraCenter();
@@ -121,6 +141,7 @@ namespace Goudan_SLAM
             if (mObservations.count(pKF))
             {
                 int idx = mObservations[pKF];
+                
                 nObs--;
 
                 mObservations.erase(pKF);
@@ -151,6 +172,7 @@ namespace Goudan_SLAM
         unique_lock<mutex> lock(mMutexFeatures);
         return nObs;
     }
+
     // 告知可以观测到该MapPoint的Frame，该MapPoint已被删除
     void MapPoint::SetBadFlag()
     {
@@ -489,4 +511,4 @@ namespace Goudan_SLAM
         return nScale;
     }
 
-}
+} // namespace Goudan_SLAM

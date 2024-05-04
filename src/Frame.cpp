@@ -1,22 +1,31 @@
 #include "Frame.h"
 #include "Converter.h"
+#include "ORBmatcher.h"
+#include <thread>
 
 namespace Goudan_SLAM
 {
+
     long unsigned int Frame::nNextId = 0;
     bool Frame::mbInitialComputations = true;
     float Frame::cx, Frame::cy, Frame::fx, Frame::fy, Frame::invfx, Frame::invfy;
     float Frame::mnMinX, Frame::mnMinY, Frame::mnMaxX, Frame::mnMaxY;
     float Frame::mfGridElementWidthInv, Frame::mfGridElementHeightInv;
 
-    Frame::Frame() {}
+    Frame::Frame()
+    {
+    }
 
+    /**
+     * @brief Copy constructor
+     *
+     * 复制构造函数, mLastFrame = Frame(mCurrentFrame)
+     */
     Frame::Frame(const Frame &frame)
         : mpORBvocabulary(frame.mpORBvocabulary), mpORBextractorLeft(frame.mpORBextractorLeft),
           mTimeStamp(frame.mTimeStamp), mK(frame.mK.clone()), mDistCoef(frame.mDistCoef.clone()),
-          mbf(frame.mbf), mb(frame.mb), mThDepth(frame.mThDepth), N(frame.N), mvKeys(frame.mvKeys),
-          mvKeysUn(frame.mvKeysUn), mBowVec(frame.mBowVec), mFeatVec(frame.mFeatVec),
-          mDescriptors(frame.mDescriptors.clone()),
+          mbf(frame.mbf), mb(frame.mb), mThDepth(frame.mThDepth), N(frame.N), mvKeys(frame.mvKeys), mvKeysUn(frame.mvKeysUn),
+          mBowVec(frame.mBowVec), mFeatVec(frame.mFeatVec), mDescriptors(frame.mDescriptors.clone()),
           mvpMapPoints(frame.mvpMapPoints), mvbOutlier(frame.mvbOutlier), mnId(frame.mnId),
           mpReferenceKF(frame.mpReferenceKF), mnScaleLevels(frame.mnScaleLevels),
           mfScaleFactor(frame.mfScaleFactor), mfLogScaleFactor(frame.mfLogScaleFactor),
@@ -33,8 +42,7 @@ namespace Goudan_SLAM
 
     // 单目初始化
     Frame::Frame(const cv::Mat &imGray, const double &timeStamp, ORBExtractor *extractor, ORBVocabulary *voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth)
-        : mpORBvocabulary(voc), mpORBextractorLeft(extractor),
-          mTimeStamp(timeStamp), mK(K.clone()), mDistCoef(distCoef.clone()), mbf(bf), mThDepth(thDepth)
+        : mpORBvocabulary(voc), mpORBextractorLeft(extractor), mTimeStamp(timeStamp), mK(K.clone()), mDistCoef(distCoef.clone()), mbf(bf), mThDepth(thDepth)
     {
         // Frame ID
         mnId = nNextId++;
@@ -105,15 +113,27 @@ namespace Goudan_SLAM
 
     void Frame::ExtractORB(const cv::Mat &im)
     {
-        (*mpORBextractorLeft)(im, cv::Mat(), mvKeys, mDescriptors);
+               (*mpORBextractorLeft)(im, cv::Mat(), mvKeys, mDescriptors);
+
     }
 
+    /**
+     * @brief Set the camera pose.
+     *
+     * 设置相机姿态，随后会调用 UpdatePoseMatrices() 来改变mRcw,mRwc等变量的值
+     * @param Tcw Transformation from world to camera
+     */
     void Frame::SetPose(cv::Mat Tcw)
     {
         mTcw = Tcw.clone();
         UpdatePoseMatrices();
     }
 
+    /**
+     * @brief Computes rotation, translation and camera center matrices from the camera pose.
+     *
+     * 根据Tcw计算mRcw、mtcw和mRwc、mOw
+     */
     void Frame::UpdatePoseMatrices()
     {
         // [x_camera 1] = [R|t]*[x_world 1]，坐标为齐次形式
@@ -345,7 +365,7 @@ namespace Goudan_SLAM
             mat.at<float>(3, 0) = imLeft.cols; // 右下
             mat.at<float>(3, 1) = imLeft.rows;
 
-            // 矫正
+            // Undistort corners
             mat = mat.reshape(2);
             cv::undistortPoints(mat, mat, mK, mDistCoef, cv::Mat(), mK);
             mat = mat.reshape(1);
@@ -363,4 +383,5 @@ namespace Goudan_SLAM
             mnMaxY = imLeft.rows;
         }
     }
-}
+
+} // namespace Goudan_SLAM

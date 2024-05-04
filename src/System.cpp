@@ -58,7 +58,8 @@ namespace Goudan_SLAM
         mptLocalMapping = new thread(&Goudan_SLAM::LocalMapping::Run, mpLocalMapper);
 
         // 初始化闭环检测(Loop Closing)线程并启动
-        // :TODO
+        mpLoopCloser = new LoopClosing(mpMap, mpKeyFrameDatabase, mpVocabulary, false);
+        mptLoopClosing = new thread(&Goudan_SLAM::LoopClosing::Run, mpLoopCloser);
 
         // 初始化Viewer线程并启动
         // cout << "Init Viewer" <<endl;
@@ -67,10 +68,14 @@ namespace Goudan_SLAM
         mptViewer = new thread(&Viewer::Run, mpViewer);
         // cout <<"Viewer Running.............................." <<endl;
         // 设置一些必要的指针给对象
-        mpTracker->SetViewer(mpViewer);
         mpTracker->SetLocalMapper(mpLocalMapper);
+        mpTracker->SetLoopClosing(mpLoopCloser);
 
         mpLocalMapper->SetTracker(mpTracker);
+        mpLocalMapper->SetLoopCloser(mpLoopCloser);
+
+        mpLoopCloser->SetTracker(mpTracker);
+        mpLoopCloser->SetLocalMapper(mpLocalMapper);
     }
 
     cv::Mat System::TrackMonocular(const cv::Mat &im, const double &timestamp)

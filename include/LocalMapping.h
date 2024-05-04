@@ -4,6 +4,7 @@
 #include "KeyFrame.h"
 #include "Map.h"
 #include "Tracking.h"
+#include "LoopClosing.h"
 #include "KeyFrameDatabase.h"
 
 #include <mutex>
@@ -13,11 +14,14 @@ namespace Goudan_SLAM
 {
     class Tracking;
     class Map;
+    class LoopClosing;
 
     class LocalMapping
     {
     public:
         LocalMapping(Map *pMap);
+
+        void SetLoopCloser(LoopClosing* pLoopCloser);
 
         void SetTracker(Tracking *pTracker);
 
@@ -74,7 +78,7 @@ namespace Goudan_SLAM
 
         Map *mpMap;
 
-        // LoopClosing *mpLoopCloser;
+        LoopClosing *mpLoopCloser;
         Tracking *mpTracker;
 
         // Tracking线程向LocalMapping中插入关键帧是先插入到该队列中

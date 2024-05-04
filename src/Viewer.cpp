@@ -131,20 +131,20 @@ namespace Goudan_SLAM
             cv::imshow("Goudan-SLAM: Current Frame", im);
             cv::waitKey(mT);
 
-            // if (menuReset)
-            // {
-            //     menuShowGraph = true;
-            //     menuShowKeyFrames = true;
-            //     menuShowPoints = true;
-            //     menuLocalizationMode = false;
-            //     if (bLocalizationMode)
-            //         mpSystem->DeactivateLocalizationMode();
-            //     bLocalizationMode = false;
-            //     bFollow = true;
-            //     menuFollowCamera = true;
-            //     mpSystem->Reset();
-            //     menuReset = false;
-            // }
+            if (menuReset)
+            {
+                menuShowGraph = true;
+                menuShowKeyFrames = true;
+                menuShowPoints = true;
+                menuLocalizationMode = false;
+                if (bLocalizationMode)
+                    mpSystem->DeactivateLocalizationMode();
+                bLocalizationMode = false;
+                bFollow = true;
+                menuFollowCamera = true;
+                mpSystem->Reset();
+                menuReset = false;
+            }
 
             if (Stop())
             {

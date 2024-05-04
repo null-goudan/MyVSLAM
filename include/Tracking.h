@@ -17,6 +17,7 @@
 #include "MapDrawer.h"
 #include "System.h"
 #include "LocalMapping.h"
+#include "LoopClosing.h"
 
 #include <mutex>
 
@@ -35,8 +36,10 @@ namespace Goudan_SLAM{
         cv::Mat GrabImageMonocular(const cv::Mat &im, const double &timestamp);
 
         void SetLocalMapper(LocalMapping* pLocalMapper);
+        void SetLoopClosing(LoopClosing* pLoopClosing);
         void SetViewer(Viewer* pViewer);
 
+        void ChangeCalibration(const string &strSettingPath);
         void InformOnlyTracking(const bool &flag);
         // member
     public:
@@ -101,7 +104,7 @@ namespace Goudan_SLAM{
 
         //Other Thread Pointers
         LocalMapping* mpLocalMapper;
-        // LoopClosing* mpLoopClosing;
+        LoopClosing* mpLoopClosing;
 
         ORBExtractor* mpORBextractorLeft;
         ORBExtractor* mpIniORBextractor;
