@@ -47,6 +47,9 @@ src/KeyFrameDatabase.cpp
 src/Converter.cpp
 src/Optimizer.cpp
 src/LocalMapping.cpp
+src/LoopClosing.cpp
+src/Sim3Solver.cpp
+src/PnPsolver.cpp
 )
 
 target_link_libraries(${PROJECT_NAME}

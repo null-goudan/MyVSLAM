@@ -707,11 +707,6 @@ namespace Goudan_SLAM
      */
     void LocalMapping::KeyFrameCulling()
     {
-        // Check redundant keyframes (only local keyframes)
-        // A keyframe is considered redundant if the 90% of the MapPoints it sees, are seen
-        // in at least other 3 keyframes (in the same or finer scale)
-        // We only consider close stereo points
-
         // 步骤1：根据Covisibility Graph提取当前帧的共视关键帧
         vector<KeyFrame *> vpLocalKeyFrames = mpCurrentKeyFrame->GetVectorCovisibleKeyFrames();
 

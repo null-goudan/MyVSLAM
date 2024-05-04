@@ -221,7 +221,7 @@ namespace Goudan_SLAM
                 else
                 {
                     // BOW搜索，PnP求解位姿
-                    //bOK = Relocalization();
+                    // bOK = Relocalization();
                 }
             }
             else
@@ -363,37 +363,40 @@ namespace Goudan_SLAM
 
     void Tracking::MonocularInitialization()
     {
+        // 如果单目初始器还没有被创建，则创建单目初始器
         if (!mpInitializer)
         {
-            // 单目初始化帧提取的特征点数必须大于100，否则放弃此帧
+            // Set Reference Frame
+            // 单目初始帧提取的特征点数必须大于100，否则放弃该帧图像
             if (mCurrentFrame.mvKeys.size() > 100)
             {
-                // 1. 得到用于初始化的第一帧, 初始化需要两帧
+                // 步骤1：得到用于初始化的第一帧，初始化需要两帧
                 mInitialFrame = Frame(mCurrentFrame);
                 // 记录最近的一帧
                 mLastFrame = Frame(mCurrentFrame);
-                // mvbPrevMatched最大的情况就是所有的特征点都被追踪上
+                // mvbPrevMatched最大的情况就是所有特征点都被跟踪上
                 mvbPrevMatched.resize(mCurrentFrame.mvKeysUn.size());
                 for (size_t i = 0; i < mCurrentFrame.mvKeysUn.size(); i++)
-                {
                     mvbPrevMatched[i] = mCurrentFrame.mvKeysUn[i].pt;
-                }
 
-                // 由当前帧构造initializer sigma:1.0 iterations:200
+                // 这两句是多余的
+                if (mpInitializer)
+                    delete mpInitializer;
+
+                // 由当前帧构造初始器 sigma:1.0 iterations:200
                 mpInitializer = new Initializer(mCurrentFrame, 1.0, 200);
 
                 fill(mvIniMatches.begin(), mvIniMatches.end(), -1);
+
                 return;
             }
         }
         else
         {
-            // 尝试初始化
-            // 2. 如果当前帧特征点数大于100，则得到用于初始化的第二帧
+            // Try to initialize
+            // 步骤2：如果当前帧特征点数大于100，则得到用于单目初始化的第二帧
             // 如果当前帧特征点太少，重新构造初始器
-            // 因此只有连续两帧的特征点个数都大于100时, 才能继续进行初始化的过程
-
-            // cout<<"try Initialize"<<endl;
+            // 因此只有连续两帧的特征点个数都大于100时，才能继续进行初始化过程
             if ((int)mCurrentFrame.mvKeys.size() <= 100)
             {
                 delete mpInitializer;
@@ -402,32 +405,30 @@ namespace Goudan_SLAM
                 return;
             }
 
-            // 3. 在mInitialFrame 和 mCurrentFrame 找匹配的特征点对
-            // mvbPrevMathed 为前一帧的特征点， 存储了mInitialFrame 中的那些点将进行接下来的匹配
-            // mvIniMatches 存储 mInitialFrame, mCurrentFrame之间匹配的特征点
-            // cout<<"Initialize matching.."<<endl;
+            // Find correspondences
+            // 步骤3：在mInitialFrame与mCurrentFrame中找匹配的特征点对
+            // mvbPrevMatched为前一帧的特征点，存储了mInitialFrame中哪些点将进行接下来的匹配
+            // mvIniMatches存储mInitialFrame,mCurrentFrame之间匹配的特征点
             ORBmatcher matcher(0.9, true);
             int nmatches = matcher.SearchForInitialization(mInitialFrame, mCurrentFrame, mvbPrevMatched, mvIniMatches, 100);
-            // cout << "inital matcher: num " << nmatches <<endl;
 
-            // 4.初始化两帧之间的匹配点太少，重新初始化
+            // Check if there are enough correspondences
+            // 步骤4：如果初始化的两帧之间的匹配点太少，重新初始化
             if (nmatches < 100)
             {
-                // cout << "matcher point is less than 100: num " << nmatches << endl;
                 delete mpInitializer;
                 mpInitializer = static_cast<Initializer *>(NULL);
                 return;
             }
 
-            cv::Mat Rcw;                 // 现在的相机的旋转矩阵 相对于世界的
-            cv::Mat tcw;                 // 现在相机的平移
+            cv::Mat Rcw;                 // Current Camera Rotation
+            cv::Mat tcw;                 // Current Camera Translation
             vector<bool> vbTriangulated; // Triangulated Correspondences (mvIniMatches)
 
-            // 5. 通过F模型或者H模型进行单目初始化,得到两帧间相对运动、初始MapPoints
+            // 步骤5：通过H模型或F模型进行单目初始化，得到两帧间相对运动、初始MapPoints
             if (mpInitializer->Initialize(mCurrentFrame, mvIniMatches, Rcw, tcw, mvIniP3D, vbTriangulated))
             {
-                // cout << "initial finished" << endl;
-                // 6.删除那些无法进行三角化的匹配点
+                // 步骤6：删除那些无法进行三角化的匹配点
                 for (size_t i = 0, iend = mvIniMatches.size(); i < iend; i++)
                 {
                     if (mvIniMatches[i] >= 0 && !vbTriangulated[i])
@@ -436,16 +437,20 @@ namespace Goudan_SLAM
                         nmatches--;
                     }
                 }
-                // 将初始化的第一帧作为世界坐标系, 因此第一帧变换矩阵为单位矩阵
+
+                // Set Frame Poses
+                // 将初始化的第一帧作为世界坐标系，因此第一帧变换矩阵为单位矩阵
                 mInitialFrame.SetPose(cv::Mat::eye(4, 4, CV_32F));
-                // 有Rcw和tcw构造Tcw，并赋值给mTcw, mTcw为世界坐标系到该帧的变换矩阵
+                // 由Rcw和tcw构造Tcw,并赋值给mTcw，mTcw为世界坐标系到该帧的变换矩阵
                 cv::Mat Tcw = cv::Mat::eye(4, 4, CV_32F);
                 Rcw.copyTo(Tcw.rowRange(0, 3).colRange(0, 3));
                 tcw.copyTo(Tcw.rowRange(0, 3).col(3));
                 mCurrentFrame.SetPose(Tcw);
 
-                // 将三角化得到的3D点包装秤MapPoints
-                // Initialize函数会得到mvIniP3D
+                // 步骤6：将三角化得到的3D点包装成MapPoints
+                // Initialize函数会得到mvIniP3D，
+                // mvIniP3D是cv::Point3f类型的一个容器，是个存放3D点的临时变量，
+                // CreateInitialMapMonocular将3D点包装成MapPoint类型存入KeyFrame和Map中
                 CreateInitialMapMonocular();
             }
         }
@@ -453,64 +458,75 @@ namespace Goudan_SLAM
 
     void Tracking::CreateInitialMapMonocular()
     {
+        // Create KeyFrames
         KeyFrame *pKFini = new KeyFrame(mInitialFrame, mpMap, mpKeyFrameDB);
         KeyFrame *pKFcur = new KeyFrame(mCurrentFrame, mpMap, mpKeyFrameDB);
 
-        // :将关键帧的描述子转为Bow
+        // 步骤1：将初始关键帧的描述子转为BoW
         pKFini->ComputeBoW();
+        // 步骤2：将当前关键帧的描述子转为BoW
         pKFcur->ComputeBoW();
 
-        // 关键帧插入地图
+        // Insert KFs in the map
+        // 步骤3：将关键帧插入到地图
+        // 凡是关键帧，都要插入地图
         mpMap->AddKeyFrame(pKFini);
         mpMap->AddKeyFrame(pKFcur);
 
-        // 将3D点包装成MapPoint并添加至MapPoint
+        // Create MapPoints and asscoiate to keyframes
+        // 步骤4：将3D点包装成MapPoints
         for (size_t i = 0; i < mvIniMatches.size(); i++)
         {
             if (mvIniMatches[i] < 0)
                 continue;
 
-            // 创建 MapPoint
+            // Create MapPoint.
             cv::Mat worldPos(mvIniP3D[i]);
+
+            // 步骤4.1：用3D点构造MapPoint
             MapPoint *pMP = new MapPoint(worldPos, pKFcur, mpMap);
 
-            // 为MapPoint添加属性:
-            // 1. 观测到该点的关键帧
-            // 2. 该点的描述子
-            // 3. 该点的平均观测方向和深度范围
-            // 表示该KeyFrame的哪个特征点可以观测到哪个3D点
+            // 步骤4.2：为该MapPoint添加属性：
+            // a.观测到该MapPoint的关键帧
+            // b.该MapPoint的描述子
+            // c.该MapPoint的平均观测方向和深度范围
+
+            // 步骤4.3：表示该KeyFrame的哪个特征点可以观测到哪个3D点
             pKFini->AddMapPoint(pMP, i);
             pKFcur->AddMapPoint(pMP, mvIniMatches[i]);
 
-            // a. 观测
+            // a.表示该MapPoint可以被哪个KeyFrame的哪个特征点观测到
             pMP->AddObservation(pKFini, i);
             pMP->AddObservation(pKFcur, mvIniMatches[i]);
 
-            // b 从众多观测到该点的特征点中挑选区分度最高的描述子
+            // b.从众多观测到该MapPoint的特征点中挑选区分读最高的描述子
             pMP->ComputeDistinctiveDescriptors();
-            // c 更新该点的平均观测方向以及观测距离的范围
+            // c.更新该MapPoint平均观测方向以及观测距离的范围
             pMP->UpdateNormalAndDepth();
 
             // Fill Current Frame structure
             mCurrentFrame.mvpMapPoints[mvIniMatches[i]] = pMP;
             mCurrentFrame.mvbOutlier[mvIniMatches[i]] = false;
 
-            // 地图中添加该MapPoint
+            // Add to Map
+            //  步骤4.4：在地图中添加该MapPoint
             mpMap->AddMapPoint(pMP);
         }
 
-        // 更新帧间链接关系
+        // Update Connections
+        // 步骤5：更新关键帧间的连接关系，对于一个新创建的关键帧都会执行一次关键连接关系更新
+        // 在3D点和关键帧之间建立边，每个边有一个权重，边的权重是该关键帧与当前帧公共3D点的个数
         pKFini->UpdateConnections();
         pKFcur->UpdateConnections();
 
-        // BA优化
         // Bundle Adjustment
         cout << "New Map created with " << mpMap->MapPointsInMap() << " points" << endl;
 
         // 步骤5：BA优化
         Optimizer::GlobalBundleAdjustemnt(mpMap, 20);
 
-        // 将MapPoints中值深度归一化到1，并归一化两帧之间变换
+        // Set median depth to 1
+        // 步骤6：!!!将MapPoints的中值深度归一化到1，并归一化两帧之间变换
         // 单目传感器无法恢复真实的深度，这里将点云中值深度（欧式距离，不是指z）归一化到1
         // 评估关键帧场景深度，q=2表示中值
         float medianDepth = pKFini->ComputeSceneMedianDepth(2);
@@ -519,11 +535,7 @@ namespace Goudan_SLAM
         if (medianDepth < 0 || pKFcur->TrackedMapPoints(1) < 100)
         {
             cout << "Wrong initialization, reseting..." << endl;
-            if (medianDepth < 0)
-                cout << "reason : medianDepth < 0" << endl;
-            else
-                cout << "reason : pKFcur->TrackedMapPoints(1) < 100 " << endl;
-            // Reset();
+            Reset();
             return;
         }
 
@@ -545,6 +557,7 @@ namespace Goudan_SLAM
             }
         }
 
+        // 这部分和SteroInitialization()相似
         mpLocalMapper->InsertKeyFrame(pKFini);
         mpLocalMapper->InsertKeyFrame(pKFcur);
 
@@ -558,7 +571,7 @@ namespace Goudan_SLAM
         mpReferenceKF = pKFcur;
         mCurrentFrame.mpReferenceKF = pKFcur;
 
-        mLastFrame = Frame(mCurrentFrame); // 重定位用的上一帧信息
+        mLastFrame = Frame(mCurrentFrame);
 
         mpMap->SetReferenceMapPoints(mvpLocalMapPoints);
 
@@ -566,39 +579,39 @@ namespace Goudan_SLAM
 
         mpMap->mvpKeyFrameOrigins.push_back(pKFini);
 
-        mState = OK;
-        cout << "Initial mode Finished!!!!!" << endl;
+        mState = OK; // 初始化成功，至此，初始化过程完成
     }
 
     bool Tracking::TrackReferenceKeyFrame()
     {
-        // 1. 将当前帧的描述子转化为BoW向量
+        // Compute Bag of Words vector
+        // 步骤1：将当前帧的描述子转化为BoW向量
         mCurrentFrame.ComputeBoW();
 
+        // We perform first an ORB matching with the reference keyframe
+        // If enough matches are found we setup a PnP solver
         ORBmatcher matcher(0.7, true);
-        vector<MapPoint *> vpMapPointMatches; // 存放匹配上的3D点（初始化得到的点范围中的）
+        vector<MapPoint *> vpMapPointMatches;
 
-        // 2. 通过特征点的Bow加快当前帧和参考帧之间的特征点匹配(通过初始化已经有的一定的3D点,得到这些3D点对应的下一帧的对应的特征点)
+        // 步骤2：通过特征点的BoW加快当前帧与参考帧之间的特征点匹配
+        // 特征点的匹配关系由MapPoints进行维护
         int nmatches = matcher.SearchByBoW(mpReferenceKF, mCurrentFrame, vpMapPointMatches);
 
         if (nmatches < 15)
-        {
-            cout << "nmatches less than 15" << endl;
             return false;
-        }
 
-        // 将上一帧的位姿作为当前帧位姿的初始值
+        // 步骤3:将上一帧的位姿态作为当前帧位姿的初始值
         mCurrentFrame.mvpMapPoints = vpMapPointMatches;
-        mCurrentFrame.SetPose(mLastFrame.mTcw);
+        mCurrentFrame.SetPose(mLastFrame.mTcw); // 用上一次的Tcw设置初值，在PoseOptimization可以收敛快一些
 
-        // 通过优化3D-2D的重投影误差来获得位姿
+        // 步骤4:通过优化3D-2D的重投影误差来获得位姿
         Optimizer::PoseOptimization(&mCurrentFrame);
 
-        // 剔除优化后的outliner匹配点
+        // Discard outliers
+        // 步骤5：剔除优化后的outlier匹配点（MapPoints）
         int nmatchesMap = 0;
         for (int i = 0; i < mCurrentFrame.N; i++)
         {
-            // cout << mCurrentFrame.mvpMapPoints[i] << endl;
             if (mCurrentFrame.mvpMapPoints[i])
             {
                 if (mCurrentFrame.mvbOutlier[i])
@@ -615,7 +628,8 @@ namespace Goudan_SLAM
                     nmatchesMap++;
             }
         }
-        return nmatchesMap >= 0;
+
+        return nmatchesMap >= 10;
     }
 
     bool Tracking::TrackWithMotionModel()
@@ -638,7 +652,6 @@ namespace Goudan_SLAM
 
         // Project points seen in previous frame
         int th = 15;
-
         // 步骤2：根据匀速度模型进行对上一帧的MapPoints进行跟踪
         // 根据上一帧特征点对应的3D点投影的位置缩小特征点匹配范围
         int nmatches = matcher.SearchByProjection(mCurrentFrame, mLastFrame, th);
@@ -647,7 +660,6 @@ namespace Goudan_SLAM
         // 如果跟踪的点少，则扩大搜索半径再来一次
         if (nmatches < 20)
         {
-            cout << "less than 20 nmatches TrackWithMotionModel!" << endl;
             fill(mCurrentFrame.mvpMapPoints.begin(), mCurrentFrame.mvpMapPoints.end(), static_cast<MapPoint *>(NULL));
             nmatches = matcher.SearchByProjection(mCurrentFrame, mLastFrame, 2 * th); // 2*th
         }
@@ -693,17 +705,21 @@ namespace Goudan_SLAM
     bool Tracking::TrackLocalMap()
     {
         cout << "TrackLocalMap()" << endl;
-        // 1. 更新局部关键帧mvpLocalKeyFrames和局部地图点mvpLocalMapPoints
+        // Update Local KeyFrames and Local Points
+        // 步骤1：更新局部关键帧mvpLocalKeyFrames和局部地图点mvpLocalMapPoints
         UpdateLocalMap();
 
-        // 2. 在局部地图中查找与当前帧匹配的MapPoints
+        // 步骤2：在局部地图中查找与当前帧匹配的MapPoints
         SearchLocalPoints();
 
-        // 3. 更新局部所有MapPoint后对位姿再次优化
+        // Optimize Pose
+        // 在这个函数之前，在Relocalization、TrackReferenceKeyFrame、TrackWithMotionModel中都有位姿优化，
+        // 步骤3：更新局部所有MapPoints后对位姿再次优化
         Optimizer::PoseOptimization(&mCurrentFrame);
         mnMatchesInliers = 0;
 
-        // 3. 更新当前帧的MapPoints被观测的程度, 并统计跟踪局部地图的效果
+        // Update MapPoints Statistics
+        // 步骤3：更新当前帧的MapPoints被观测程度，并统计跟踪局部地图的效果
         for (int i = 0; i < mCurrentFrame.N; i++)
         {
             if (mCurrentFrame.mvpMapPoints[i])
@@ -749,21 +765,29 @@ namespace Goudan_SLAM
      * @return true if needed
      */
     bool Tracking::NeedNewKeyFrame()
-    {
+    { // 步骤1：如果用户在界面上选择重定位，那么将不插入关键帧
+        // 由于插入关键帧过程中会生成MapPoint，因此用户选择重定位后地图上的点云和关键帧都不会再增加
         if (mbOnlyTracking)
             return false;
 
+        // If Local Mapping is freezed by a Loop Closure do not insert keyframes
+        // 如果局部地图被闭环检测使用，则不插入关键帧
         if (mpLocalMapper->isStopped() || mpLocalMapper->stopRequested())
             return false;
 
         const int nKFs = mpMap->KeyFramesInMap();
 
-        // 2. 判断是否距离上一次插入关键帧的时间太短
+        // Do not insert keyframes if not enough frames have passed from last relocalisation
+        // 步骤2：判断是否距离上一次插入关键帧的时间太短
+        // mCurrentFrame.mnId是当前帧的ID
+        // mnLastRelocFrameId是最近一次重定位帧的ID
+        // mMaxFrames等于图像输入的帧率
         // 如果关键帧比较少，则考虑插入关键帧
         // 或距离上一次重定位超过1s，则考虑插入关键帧
         if (mCurrentFrame.mnId < mnLastRelocFrameId + mMaxFrames && nKFs > mMaxFrames)
             return false;
 
+        // Tracked MapPoints in the reference keyframe
         // 步骤3：得到参考关键帧跟踪到的MapPoints数量
         // 在UpdateLocalKeyFrames函数中会将与当前关键帧共视程度最高的关键帧设定为当前帧的参考关键帧
         int nMinObs = 3;
@@ -771,6 +795,7 @@ namespace Goudan_SLAM
             nMinObs = 2;
         int nRefMatches = mpReferenceKF->TrackedMapPoints(nMinObs);
 
+        // Local Mapping accept keyframes?
         // 步骤4：查询局部地图管理器是否繁忙
         bool bLocalMappingIdle = mpLocalMapper->AcceptKeyFrames();
 
@@ -785,7 +810,6 @@ namespace Goudan_SLAM
         float thRefRatio = 0.75f;
         if (nKFs < 2)
             thRefRatio = 0.4f; // 关键帧只有一帧，那么插入关键帧的阈值设置很低
-
         thRefRatio = 0.9f;
 
         // MapPoints中和地图关联的比例阈值
@@ -799,12 +823,17 @@ namespace Goudan_SLAM
         // Condition 1b: More than "MinFrames" have passed and Local Mapping is idle
         // localMapper处于空闲状态
         const bool c1b = (mCurrentFrame.mnId >= mnLastKeyFrameId + mMinFrames && bLocalMappingIdle);
+        // Condition 1c: tracking is weak
+        // 跟踪要跪的节奏，0.25和0.3是一个比较低的阈值
+        const bool c1c = false && (mnMatchesInliers < nRefMatches * 0.25 || ratioMap < 0.3f);
         // Condition 2: Few tracked points compared to reference keyframe. Lots of visual odometry compared to map matches.
         // 阈值比c1c要高，与之前参考帧（最近的一个关键帧）重复度不是太高
         const bool c2 = ((mnMatchesInliers < nRefMatches * thRefRatio || ratioMap < thMapRatio) && mnMatchesInliers > 15);
 
-        if ((c1a || c1b) && c2)
+        if ((c1a || c1b || c1c) && c2)
         {
+            // If the mapping accepts keyframes, insert keyframe.
+            // Otherwise send a signal to interrupt BA
             if (bLocalMappingIdle)
             {
                 return true;
@@ -812,6 +841,7 @@ namespace Goudan_SLAM
             else
             {
                 mpLocalMapper->InterruptBA();
+
                 return false;
             }
         }
@@ -857,16 +887,16 @@ namespace Goudan_SLAM
 
     void Tracking::UpdateLocalPoints()
     {
-        // 1. 清空局部MapPoints
+        // 步骤1：清空局部MapPoints
         mvpLocalMapPoints.clear();
 
-        // 2. 遍历局部关键帧
+        // 步骤2：遍历局部关键帧mvpLocalKeyFrames
         for (vector<KeyFrame *>::const_iterator itKF = mvpLocalKeyFrames.begin(), itEndKF = mvpLocalKeyFrames.end(); itKF != itEndKF; itKF++)
         {
             KeyFrame *pKF = *itKF;
             const vector<MapPoint *> vpMPs = pKF->GetMapPointMatches();
 
-            // 2. 将局部关键帧的MapPoints添加到mvpLocalMapPoints
+            // 步骤2：将局部关键帧的MapPoints添加到mvpLocalMapPoints
             for (vector<MapPoint *>::const_iterator itMP = vpMPs.begin(), itEndMP = vpMPs.end(); itMP != itEndMP; itMP++)
             {
                 MapPoint *pMP = *itMP;
@@ -886,7 +916,6 @@ namespace Goudan_SLAM
 
     void Tracking::UpdateLocalKeyFrames()
     {
-        // Each map point vote for the keyframes in which it has been observed
         // 步骤1：遍历当前帧的MapPoints，记录所有能观测到当前帧MapPoints的关键帧
         map<KeyFrame *, int> keyframeCounter;
         for (int i = 0; i < mCurrentFrame.N; i++)
@@ -1096,51 +1125,51 @@ namespace Goudan_SLAM
     }
 
     void Tracking::Reset()
-{
-    if(mpViewer)
     {
-        mpViewer->RequestStop();
-        while(!mpViewer->isStopped())
-            std::this_thread::sleep_for(std::chrono::milliseconds(3));
+        if (mpViewer)
+        {
+            mpViewer->RequestStop();
+            while (!mpViewer->isStopped())
+                std::this_thread::sleep_for(std::chrono::milliseconds(3));
+        }
+        cout << "System Reseting" << endl;
+
+        // Reset Local Mapping
+        cout << "Reseting Local Mapper...";
+        mpLocalMapper->RequestReset();
+        cout << " done" << endl;
+
+        // // Reset Loop Closing
+        // cout << "Reseting Loop Closing...";
+        // mpLoopClosing->RequestReset();
+        // cout << " done" << endl;
+
+        // Clear BoW Database
+        cout << "Reseting Database...";
+        mpKeyFrameDB->clear();
+        cout << " done" << endl;
+
+        // Clear Map (this erase MapPoints and KeyFrames)
+        mpMap->clear();
+
+        KeyFrame::nNextId = 0;
+        Frame::nNextId = 0;
+        mState = NO_IMAGES_YET;
+
+        if (mpInitializer)
+        {
+            delete mpInitializer;
+            mpInitializer = static_cast<Initializer *>(NULL);
+        }
+
+        mlRelativeFramePoses.clear();
+        mlpReferences.clear();
+        mlFrameTimes.clear();
+        mlbLost.clear();
+
+        if (mpViewer)
+            mpViewer->Release();
     }
-    cout << "System Reseting" << endl;
-
-    // Reset Local Mapping
-    cout << "Reseting Local Mapper...";
-    mpLocalMapper->RequestReset();
-    cout << " done" << endl;
-
-    // // Reset Loop Closing
-    // cout << "Reseting Loop Closing...";
-    // mpLoopClosing->RequestReset();
-    // cout << " done" << endl;
-
-    // Clear BoW Database
-    cout << "Reseting Database...";
-    mpKeyFrameDB->clear();
-    cout << " done" << endl;
-
-    // Clear Map (this erase MapPoints and KeyFrames)
-    mpMap->clear();
-
-    KeyFrame::nNextId = 0;
-    Frame::nNextId = 0;
-    mState = NO_IMAGES_YET;
-
-    if(mpInitializer)
-    {
-        delete mpInitializer;
-        mpInitializer = static_cast<Initializer*>(NULL);
-    }
-
-    mlRelativeFramePoses.clear();
-    mlpReferences.clear();
-    mlFrameTimes.clear();
-    mlbLost.clear();
-
-    if(mpViewer)
-        mpViewer->Release();
-}
 
     void Tracking::SetViewer(Viewer *pViewer)
     {
