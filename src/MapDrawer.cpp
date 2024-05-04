@@ -141,7 +141,7 @@ namespace Goudan_SLAM
                 {
                     for (vector<KeyFrame *>::const_iterator vit = vCovKFs.begin(), vend = vCovKFs.end(); vit != vend; vit++)
                     {
-                        if ((*vit)->mnID < vpKFs[i]->mnID)
+                        if ((*vit)->mnId < vpKFs[i]->mnId)
                             continue;
                         cv::Mat Ow2 = (*vit)->GetCameraCenter();
                         glVertex3f(Ow.at<float>(0), Ow.at<float>(1), Ow.at<float>(2));
@@ -164,7 +164,7 @@ namespace Goudan_SLAM
                 set<KeyFrame *> sLoopKFs = vpKFs[i]->GetLoopEdges();
                 for (set<KeyFrame *>::iterator sit = sLoopKFs.begin(), send = sLoopKFs.end(); sit != send; sit++)
                 {
-                    if ((*sit)->mnID < vpKFs[i]->mnID)
+                    if ((*sit)->mnId < vpKFs[i]->mnId)
                         continue;
                     cv::Mat Owl = (*sit)->GetCameraCenter();
                     glVertex3f(Ow.at<float>(0), Ow.at<float>(1), Ow.at<float>(2));

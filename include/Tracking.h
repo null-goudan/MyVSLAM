@@ -36,6 +36,8 @@ namespace Goudan_SLAM{
 
         void SetLocalMapper(LocalMapping* pLocalMapper);
         void SetViewer(Viewer* pViewer);
+
+        void InformOnlyTracking(const bool &flag);
         // member
     public:
         enum eTrackingState{

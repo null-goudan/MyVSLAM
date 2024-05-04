@@ -48,4 +48,11 @@ namespace Goudan_SLAM
             }
         }
     }
+
+    void KeyFrameDatabase::clear()
+    {
+        mvInvertedFile.clear();               // mvInvertedFile[i]表示包含了第i个word id的所有关键帧
+        mvInvertedFile.resize(mpVoc->size()); // mpVoc：预先训练好的词典
+    }
+
 }

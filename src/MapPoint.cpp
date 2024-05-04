@@ -9,9 +9,16 @@ namespace Goudan_SLAM
     long unsigned int MapPoint::nNextId = 0;
     mutex MapPoint::mGlobalMutex;
 
-    // 给定坐标和关键帧构造地图点
+    /**
+     * @brief 给定坐标与keyframe构造MapPoint
+     *
+     * CreateInitialMapMonocular()，LocalMapping::CreateNewMapPoints()
+     * @param Pos    MapPoint的坐标（wrt世界坐标系）
+     * @param pRefKF KeyFrame
+     * @param pMap   Map
+     */
     MapPoint::MapPoint(const cv::Mat &Pos, KeyFrame *pRefKF, Map *pMap)
-        : mnFirstKFid(pRefKF->mnID), mnFirstFrame(pRefKF->mnFrameId), nObs(0), mnTrackReferenceForFrame(0),
+        : mnFirstKFid(pRefKF->mnId), mnFirstFrame(pRefKF->mnFrameId), nObs(0), mnTrackReferenceForFrame(0),
           mnLastFrameSeen(0), mnBALocalForKF(0), mnFuseCandidateForKF(0), mnLoopPointForKF(0), mnCorrectedByKF(0),
           mnCorrectedReference(0), mnBAGlobalForKF(0), mpRefKF(pRefKF), mnVisible(1), mnFound(1), mbBad(false),
           mpReplaced(static_cast<MapPoint *>(NULL)), mfMinDistance(0), mfMaxDistance(0), mpMap(pMap)
@@ -19,15 +26,24 @@ namespace Goudan_SLAM
         Pos.copyTo(mWorldPos);
         mNormalVector = cv::Mat::zeros(3, 1, CV_32F);
 
+        // MapPoints can be created from Tracking and Local Mapping. This mutex avoid conflicts with id.
         unique_lock<mutex> lock(mpMap->mMutexPointCreation);
         mnId = nNextId++;
     }
 
+    /**
+     * @brief 给定坐标与frame构造MapPoint
+     *
+     * @param Pos    MapPoint的坐标（wrt世界坐标系）
+     * @param pMap   Map
+     * @param pFrame Frame
+     * @param idxF   MapPoint在Frame中的索引，即对应的特征点的编号
+     */
     MapPoint::MapPoint(const cv::Mat &Pos, Map *pMap, Frame *pFrame, const int &idxF)
-        :mnFirstKFid(-1), mnFirstFrame(pFrame->mnId), nObs(0), mnTrackReferenceForFrame(0), mnLastFrameSeen(0),
-        mnBALocalForKF(0), mnFuseCandidateForKF(0), mnLoopPointForKF(0), mnCorrectedByKF(0),
-        mnCorrectedReference(0), mnBAGlobalForKF(0), mpRefKF(static_cast<KeyFrame *>(NULL)), mnVisible(1),
-        mnFound(1), mbBad(false), mpReplaced(NULL), mpMap(pMap)
+        : mnFirstKFid(-1), mnFirstFrame(pFrame->mnId), nObs(0), mnTrackReferenceForFrame(0), mnLastFrameSeen(0),
+          mnBALocalForKF(0), mnFuseCandidateForKF(0), mnLoopPointForKF(0), mnCorrectedByKF(0),
+          mnCorrectedReference(0), mnBAGlobalForKF(0), mpRefKF(static_cast<KeyFrame *>(NULL)), mnVisible(1),
+          mnFound(1), mbBad(false), mpReplaced(NULL), mpMap(pMap)
     {
         Pos.copyTo(mWorldPos);
         cv::Mat Ow = pFrame->GetCameraCenter();
@@ -77,21 +93,24 @@ namespace Goudan_SLAM
         return mpRefKF;
     }
 
+    /**
+     * @brief 添加观测
+     *
+     * 记录哪些KeyFrame的那个特征点能观测到该MapPoint \n
+     * 并增加观测的相机数目nObs，单目+1，双目或者grbd+2
+     * 这个函数是建立关键帧共视关系的核心函数，能共同观测到某些MapPoints的关键帧是共视关键帧
+     * @param pKF KeyFrame
+     * @param idx MapPoint在KeyFrame中的索引
+     */
     void MapPoint::AddObservation(KeyFrame *pKF, size_t idx)
     {
         unique_lock<mutex> lock(mMutexFeatures);
         if (mObservations.count(pKF))
             return;
-
+        // 记录下能观测到该MapPoint的KF和该MapPoint在KF中的索引
         mObservations[pKF] = idx;
 
-        nObs++;
-    }
-
-    int MapPoint::Observations()
-    {
-        unique_lock<mutex> lock(mMutexFeatures);
-        return nObs;
+        nObs++; // 单目
     }
 
     void MapPoint::EraseObservation(KeyFrame *pKF)
@@ -102,14 +121,15 @@ namespace Goudan_SLAM
             if (mObservations.count(pKF))
             {
                 int idx = mObservations[pKF];
-
                 nObs--;
-                
+
                 mObservations.erase(pKF);
-                // 如果该keyFrame是参考帧，该Frame被删除后重新制定RefFrame
+
+                // 如果该keyFrame是参考帧，该Frame被删除后重新指定RefFrame
                 if (mpRefKF == pKF)
                     mpRefKF = mObservations.begin()->first;
 
+                // If only 2 observations or less, discard point
                 // 当观测到该点的相机数目少于2时，丢弃该点
                 if (nObs <= 2)
                     bBad = true;
@@ -126,7 +146,12 @@ namespace Goudan_SLAM
         return mObservations;
     }
 
-    // 告知可以观测到该MapPoint的Frame，该点已被删除
+    int MapPoint::Observations()
+    {
+        unique_lock<mutex> lock(mMutexFeatures);
+        return nObs;
+    }
+    // 告知可以观测到该MapPoint的Frame，该MapPoint已被删除
     void MapPoint::SetBadFlag()
     {
         map<KeyFrame *, size_t> obs;
@@ -134,33 +159,16 @@ namespace Goudan_SLAM
             unique_lock<mutex> lock1(mMutexFeatures);
             unique_lock<mutex> lock2(mMutexPos);
             mbBad = true;
-            obs = mObservations;   // 将mObservations 转存到 obs
-            mObservations.clear(); // 把mObservations 指向的内存清理
+            obs = mObservations;   // 把mObservations转存到obs，obs和mObservations里存的是指针，赋值过程为浅拷贝
+            mObservations.clear(); // 把mObservations指向的内存释放，obs作为局部变量之后自动删除
         }
         for (map<KeyFrame *, size_t>::iterator mit = obs.begin(), mend = obs.end(); mit != mend; mit++)
         {
             KeyFrame *pKF = mit->first;
-            pKF->EraseMapPointMatch(mit->second);
+            pKF->EraseMapPointMatch(mit->second); // 告诉可以观测到该MapPoint的KeyFrame，该MapPoint被删了
         }
 
-        mpMap->EraseMapPoint(this);
-    }
-
-    // 没有经过MapPointCulling检测的MapPoints
-    bool MapPoint::isBad()
-    {
-        unique_lock<mutex> lock(mMutexFeatures);
-        unique_lock<mutex> lock2(mMutexPos);
-        return mbBad;
-    }
-
-    int MapPoint::GetIndexInKeyFrame(KeyFrame *pKF)
-    {
-        unique_lock<mutex> lock(mMutexFeatures);
-        if (mObservations.count(pKF))
-            return mObservations[pKF];
-        else
-            return -1;
+        mpMap->EraseMapPoint(this); // 擦除该MapPoint申请的内存
     }
 
     MapPoint *MapPoint::GetReplaced()
@@ -168,17 +176,6 @@ namespace Goudan_SLAM
         unique_lock<mutex> lock1(mMutexFeatures);
         unique_lock<mutex> lock2(mMutexPos);
         return mpReplaced;
-    }
-
-    /**
-     * @brief check MapPoint is in keyframe
-     * @param  pKF KeyFrame
-     * @return     true if in pKF
-     */
-    bool MapPoint::IsInKeyFrame(KeyFrame *pKF)
-    {
-        unique_lock<mutex> lock(mMutexFeatures);
-        return (mObservations.count(pKF));
     }
 
     // 在形成闭环的时候，会更新KeyFrame与MapPoint之间的关系
@@ -225,51 +222,45 @@ namespace Goudan_SLAM
         mpMap->EraseMapPoint(this);
     }
 
-    // 更新平均观测方向以及观测距离范围
-    void MapPoint::UpdateNormalAndDepth()
+    // 没有经过MapPointCulling检测的MapPoints
+    bool MapPoint::isBad()
     {
+        unique_lock<mutex> lock(mMutexFeatures);
+        unique_lock<mutex> lock2(mMutexPos);
+        return mbBad;
+    }
 
-        map<KeyFrame *, size_t> observations;
-        KeyFrame *pRefKF;
-        cv::Mat Pos;
-        {
-            unique_lock<mutex> lock1(mMutexFeatures);
-            unique_lock<mutex> lock2(mMutexPos);
-            if (mbBad)
-                return;
+    /**
+     * @brief Increase Visible
+     *
+     * Visible表示：
+     * 1. 该MapPoint在某些帧的视野范围内，通过Frame::isInFrustum()函数判断
+     * 2. 该MapPoint被这些帧观测到，但并不一定能和这些帧的特征点匹配上
+     *    例如：有一个MapPoint（记为M），在某一帧F的视野范围内，
+     *    但并不表明该点M可以和F这一帧的某个特征点能匹配上
+     */
+    void MapPoint::IncreaseVisible(int n)
+    {
+        unique_lock<mutex> lock(mMutexFeatures);
+        mnVisible += n;
+    }
 
-            observations = mObservations; // 获得观测到该3d点的所有关键帧
-            pRefKF = mpRefKF;             // 观测到该点的参考关键帧
-            Pos = mWorldPos.clone();      // 3d点在世界坐标系中的位置
-        }
+    /**
+     * @brief Increase Found
+     *
+     * 能找到该点的帧数+n，n默认为1
+     * @see Tracking::TrackLocalMap()
+     */
+    void MapPoint::IncreaseFound(int n)
+    {
+        unique_lock<mutex> lock(mMutexFeatures);
+        mnFound += n;
+    }
 
-        if (observations.empty())
-            return;
-
-        cv::Mat normal = cv::Mat::zeros(3, 1, CV_32F);
-        int n = 0;
-        for (map<KeyFrame *, size_t>::iterator mit = observations.begin(), mend = observations.end(); mit != mend; mit++)
-        {
-            KeyFrame *pKF = mit->first;
-            cv::Mat Owi = pKF->GetCameraCenter();
-            cv::Mat normali = mWorldPos - Owi;
-            normal = normal + normali / cv::norm(normali); // 对所有关键帧对该点的观测方向归一化为单位向量进行求和
-            n++;
-        }
-
-        cv::Mat PC = Pos - pRefKF->GetCameraCenter(); // 参考关键帧相机指向3D点的向量（在世界坐标系下的表示）
-        const float dist = cv::norm(PC);              // 该点到参考关键帧相机的距离
-        const int level = pRefKF->mvKeysUn[observations[pRefKF]].octave;
-        const float levelScaleFactor = pRefKF->mvScaleFactors[level];
-        const int nLevels = pRefKF->mnScaleLevels; // 金字塔层数
-
-        {
-            unique_lock<mutex> lock3(mMutexPos);
-            // 另见PredictScale函数前的注释
-            mfMaxDistance = dist * levelScaleFactor;                             // 观测到该点的距离最大值
-            mfMinDistance = mfMaxDistance / pRefKF->mvScaleFactors[nLevels - 1]; // 观测到该点的距离最小值
-            mNormalVector = normal / n;                                          // 获得平均的观测方向
-        }
+    float MapPoint::GetFoundRatio()
+    {
+        unique_lock<mutex> lock(mMutexFeatures);
+        return static_cast<float>(mnFound) / mnVisible;
     }
 
     /**
@@ -277,7 +268,7 @@ namespace Goudan_SLAM
      *
      * 由于一个MapPoint会被许多相机观测到，因此在插入关键帧后，需要判断是否更新当前点的最适合的描述子 \n
      * 先获得当前点的所有描述子，然后计算描述子之间的两两距离，最好的描述子与其他描述子应该具有最小的距离中值
-     *
+     * @see III - C3.3
      */
     void MapPoint::ComputeDistinctiveDescriptors()
     {
@@ -365,37 +356,78 @@ namespace Goudan_SLAM
         return mDescriptor.clone();
     }
 
-    /**
-     * @brief Increase Visible
-     *
-     * Visible表示：
-     * 1. 该MapPoint在某些帧的视野范围内，通过Frame::isInFrustum()函数判断
-     * 2. 该MapPoint被这些帧观测到，但并不一定能和这些帧的特征点匹配上
-     *    例如：有一个MapPoint（记为M），在某一帧F的视野范围内，
-     *    但并不表明该点M可以和F这一帧的某个特征点能匹配上
-     */
-    void MapPoint::IncreaseVisible(int n)
+    int MapPoint::GetIndexInKeyFrame(KeyFrame *pKF)
     {
         unique_lock<mutex> lock(mMutexFeatures);
-        mnVisible += n;
+        if (mObservations.count(pKF))
+            return mObservations[pKF];
+        else
+            return -1;
     }
 
     /**
-     * @brief Increase Found
-     *
-     * 能找到该点的帧数+n，n默认为1
-     * @see Tracking::TrackLocalMap()
+     * @brief check MapPoint is in keyframe
+     * @param  pKF KeyFrame
+     * @return     true if in pKF
      */
-    void MapPoint::IncreaseFound(int n)
+    bool MapPoint::IsInKeyFrame(KeyFrame *pKF)
     {
         unique_lock<mutex> lock(mMutexFeatures);
-        mnFound += n;
+        return (mObservations.count(pKF));
     }
 
-    float MapPoint::GetFoundRatio()
+    /**
+     * @brief 更新平均观测方向以及观测距离范围
+     *
+     * 由于一个MapPoint会被许多相机观测到，因此在插入关键帧后，需要更新相应变量
+     * mNormalVector：3D点被观测的平均方向
+     * mfMaxDistance：观测到该3D点的最大距离
+     * mfMinDistance：观测到该3D点的最小距离
+     * @see III - C2.2 c2.4
+     */
+    void MapPoint::UpdateNormalAndDepth()
     {
-        unique_lock<mutex> lock(mMutexFeatures);
-        return static_cast<float>(mnFound) / mnVisible;
+        map<KeyFrame *, size_t> observations;
+        KeyFrame *pRefKF;
+        cv::Mat Pos;
+        {
+            unique_lock<mutex> lock1(mMutexFeatures);
+            unique_lock<mutex> lock2(mMutexPos);
+            if (mbBad)
+                return;
+
+            observations = mObservations; // 获得观测到该3d点的所有关键帧
+            pRefKF = mpRefKF;             // 观测到该点的参考关键帧
+            Pos = mWorldPos.clone();      // 3d点在世界坐标系中的位置
+        }
+
+        if (observations.empty())
+            return;
+
+        cv::Mat normal = cv::Mat::zeros(3, 1, CV_32F);
+        int n = 0;
+        for (map<KeyFrame *, size_t>::iterator mit = observations.begin(), mend = observations.end(); mit != mend; mit++)
+        {
+            KeyFrame *pKF = mit->first;
+            cv::Mat Owi = pKF->GetCameraCenter();
+            cv::Mat normali = mWorldPos - Owi;
+            normal = normal + normali / cv::norm(normali); // 对所有关键帧对该点的观测方向归一化为单位向量进行求和
+            n++;
+        }
+
+        cv::Mat PC = Pos - pRefKF->GetCameraCenter(); // 参考关键帧相机指向3D点的向量（在世界坐标系下的表示）
+        const float dist = cv::norm(PC);              // 该点到参考关键帧相机的距离
+        const int level = pRefKF->mvKeysUn[observations[pRefKF]].octave;
+        const float levelScaleFactor = pRefKF->mvScaleFactors[level];
+        const int nLevels = pRefKF->mnScaleLevels; // 金字塔层数
+
+        {
+            unique_lock<mutex> lock3(mMutexPos);
+            // 另见PredictScale函数前的注释
+            mfMaxDistance = dist * levelScaleFactor;                             // 观测到该点的距离最大值
+            mfMinDistance = mfMaxDistance / pRefKF->mvScaleFactors[nLevels - 1]; // 观测到该点的距离最小值
+            mNormalVector = normal / n;                                          // 获得平均的观测方向
+        }
     }
 
     float MapPoint::GetMinDistanceInvariance()

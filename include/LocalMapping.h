@@ -7,6 +7,7 @@
 #include "KeyFrameDatabase.h"
 
 #include <mutex>
+#include<unistd.h>
 
 namespace Goudan_SLAM
 {

@@ -312,7 +312,7 @@ namespace Goudan_SLAM
 
         // vector from LastFrame to CurrentFrame expressed in LastFrame
         const cv::Mat tlc = Rlw * twc + tlw; // Rlw*twc(w) = twc(l), twc(l) + tlw(l) = tlc(l)
-        
+
         for (int i = 0; i < LastFrame.N; i++)
         {
             MapPoint *pMP = LastFrame.mvpMapPoints[i];
@@ -531,16 +531,20 @@ namespace Goudan_SLAM
         const DBoW2::FeatureVector &vFeatVec1 = pKF1->mFeatVec;
         const DBoW2::FeatureVector &vFeatVec2 = pKF2->mFeatVec;
 
+        // Compute epipole in second image
         // 计算KF1的相机中心在KF2图像平面的坐标，即极点坐标
         cv::Mat Cw = pKF1->GetCameraCenter(); // tw2c1
         cv::Mat R2w = pKF2->GetRotation();    // Rc2w
         cv::Mat t2w = pKF2->GetTranslation(); // tc2w
         cv::Mat C2 = R2w * Cw + t2w;          // tc2c1 KF1的相机中心在KF2坐标系的表示
-
         const float invz = 1.0f / C2.at<float>(2);
-        // 0. 得到KF1的相机光心在KF2中的坐标（KF1在KF2中的极点坐标）
+        // 步骤0：得到KF1的相机光心在KF2中的坐标（KF1在KF2中的极点坐标）
         const float ex = pKF2->fx * C2.at<float>(0) * invz + pKF2->cx;
         const float ey = pKF2->fy * C2.at<float>(1) * invz + pKF2->cy;
+
+        // Find matches between not tracked keypoints
+        // Matching speed-up by ORB Vocabulary
+        // Compare only ORB that share the same node
 
         int nmatches = 0;
         vector<bool> vbMatched2(pKF2->N, false);
@@ -552,6 +556,7 @@ namespace Goudan_SLAM
 
         const float factor = HISTO_LENGTH / 360.0f;
 
+        // We perform the matching over ORB that belong to the same vocabulary node (at a certain level)
         // 将属于同一节点(特定层)的ORB特征进行匹配
         // FeatureVector的数据结构类似于：{(node1,feature_vector1) (node2,feature_vector2)...}
         // f1it->first对应node编号，f1it->second对应属于该node的所有特特征点编号
@@ -560,21 +565,22 @@ namespace Goudan_SLAM
         DBoW2::FeatureVector::const_iterator f1end = vFeatVec1.end();
         DBoW2::FeatureVector::const_iterator f2end = vFeatVec2.end();
 
-        // 1. 遍历pKF1 和 pKF2 中的node节点
+        // 步骤1：遍历pKF1和pKF2中的node节点
         while (f1it != f1end && f2it != f2end)
         {
             // 如果f1it和f2it属于同一个node节点
             if (f1it->first == f2it->first)
             {
-                // 2. 遍历该node节点下（f1it->first）的所有特征点
+                // 步骤2：遍历该node节点下(f1it->first)的所有特征点
                 for (size_t i1 = 0, iend1 = f1it->second.size(); i1 < iend1; i1++)
                 {
                     // 获取pKF1中属于该node节点的所有特征点索引
                     const size_t idx1 = f1it->second[i1];
 
-                    // 2.1：通过特征点索引idx1在pKF1中取出对应的MapPoint
+                    // 步骤2.1：通过特征点索引idx1在pKF1中取出对应的MapPoint
                     MapPoint *pMP1 = pKF1->GetMapPoint(idx1);
 
+                    // If there is already a MapPoint skip
                     // ！！！！！！由于寻找的是未匹配的特征点，所以pMP1应该为NULL
                     if (pMP1)
                         continue;
@@ -628,6 +634,7 @@ namespace Goudan_SLAM
                             bestDist = dist;
                         }
                     }
+
                     // 步骤1、2、3、4总结下来就是：将左图像的每个特征点与右图像同一node节点的所有特征点
                     // 依次检测，判断是否满足对极几何约束，满足约束就是匹配的特征点
 
@@ -652,6 +659,7 @@ namespace Goudan_SLAM
                         }
                     }
                 }
+
                 f1it++;
                 f2it++;
             }
@@ -664,6 +672,7 @@ namespace Goudan_SLAM
                 f2it = vFeatVec2.lower_bound(f1it->first);
             }
         }
+
         if (mbCheckOrientation)
         {
             int ind1 = -1;
@@ -694,7 +703,6 @@ namespace Goudan_SLAM
             vMatchedPairs.push_back(make_pair(i, vMatches12[i]));
         }
 
-        cout << "Match Trianglation matches : " << nmatches << endl;
         return nmatches;
     }
 
@@ -779,8 +787,6 @@ namespace Goudan_SLAM
             if (!pKF->IsInImage(u, v))
                 continue;
 
-            const float ur = u - bf * invz;
-
             const float maxDistance = pMP->GetMaxDistanceInvariance();
             const float minDistance = pMP->GetMinDistanceInvariance();
             cv::Mat PO = p3Dw - Ow;
@@ -823,7 +829,6 @@ namespace Goudan_SLAM
                 if (kpLevel < nPredictedLevel - 1 || kpLevel > nPredictedLevel)
                     continue;
 
-                // 计算MapPoint投影的坐标与这个区域特征点的距离，如果偏差很大，直接跳过特征点匹配
 
                 const float &kpx = kp.pt.x;
                 const float &kpy = kp.pt.y;
@@ -871,7 +876,6 @@ namespace Goudan_SLAM
 
         return nFused;
     }
-
     // 根据观测角度决定 SearchByProjection 的搜索范围
     float ORBmatcher::RadiusByViewingCos(const float &viewCos)
     {

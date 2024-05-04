@@ -216,15 +216,15 @@ namespace Goudan_SLAM
                 continue;
             g2o::VertexSE3Expmap *vSE3 = new g2o::VertexSE3Expmap();
             vSE3->setEstimate(Converter::toSE3Quat(pKF->GetPose()));
-            vSE3->setId(pKF->mnID);
-            vSE3->setFixed(pKF->mnID == 0);
+            vSE3->setId(pKF->mnId);
+            vSE3->setFixed(pKF->mnId == 0);
             optimizer.addVertex(vSE3);
-            if (pKF->mnID > maxKFid)
-                maxKFid = pKF->mnID;
+            if (pKF->mnId > maxKFid)
+                maxKFid = pKF->mnId;
         }
 
         const float thHuber2D = sqrt(5.99);
-        const float thHuber3D = sqrt(7.815);
+        // const float thHuber3D = sqrt(7.815);
 
         // Set MapPoint vertices
         // 步骤2.2：向优化器添加MapPoints顶点
@@ -249,7 +249,7 @@ namespace Goudan_SLAM
             {
 
                 KeyFrame *pKF = mit->first;
-                if (pKF->isBad() || pKF->mnID > maxKFid)
+                if (pKF->isBad() || pKF->mnId > maxKFid)
                     continue;
 
                 nEdges++;
@@ -262,7 +262,7 @@ namespace Goudan_SLAM
                 g2o::EdgeSE3ProjectXYZ *e = new g2o::EdgeSE3ProjectXYZ();
 
                 e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(id)));
-                e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(pKF->mnID)));
+                e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(pKF->mnId)));
                 e->setMeasurement(obs);
                 const float &invSigma2 = pKF->mvInvLevelSigma2[kpUn.octave];
                 e->setInformation(Eigen::Matrix2d::Identity() * invSigma2);
@@ -307,7 +307,7 @@ namespace Goudan_SLAM
             KeyFrame *pKF = vpKFs[i];
             if (pKF->isBad())
                 continue;
-            g2o::VertexSE3Expmap *vSE3 = static_cast<g2o::VertexSE3Expmap *>(optimizer.vertex(pKF->mnID));
+            g2o::VertexSE3Expmap *vSE3 = static_cast<g2o::VertexSE3Expmap *>(optimizer.vertex(pKF->mnId));
             g2o::SE3Quat SE3quat = vSE3->estimate();
             if (nLoopKF == 0)
             {
@@ -348,26 +348,27 @@ namespace Goudan_SLAM
     }
 
     void Optimizer::LocalBundleAdjustment(KeyFrame *pKF, bool *pbStopFlag, Map *pMap)
-    {
-        // 用于LocalMapping线程的局部BA优化
+    { // 该优化函数用于LocalMapping线程的局部BA优化
 
+        // Local KeyFrames: First Breadth Search from Current Keyframe
         list<KeyFrame *> lLocalKeyFrames;
 
-        // 1. 将当前关键帧加入lLocalKeyFrames;
+        // 步骤1：将当前关键帧加入lLocalKeyFrames
         lLocalKeyFrames.push_back(pKF);
-        pKF->mnBALocalForKF = pKF->mnID;
+        pKF->mnBALocalForKF = pKF->mnId;
 
-        // 2. 找到关键帧连接的关键帧(一级相连)， 加入lLocalKeyFrames中
+        // 步骤2：找到关键帧连接的关键帧（一级相连），加入lLocalKeyFrames中
         const vector<KeyFrame *> vNeighKFs = pKF->GetVectorCovisibleKeyFrames();
         for (int i = 0, iend = vNeighKFs.size(); i < iend; i++)
         {
             KeyFrame *pKFi = vNeighKFs[i];
-            pKFi->mnBALocalForKF = pKF->mnID;
+            pKFi->mnBALocalForKF = pKF->mnId;
             if (!pKFi->isBad())
                 lLocalKeyFrames.push_back(pKFi);
         }
 
-        // 3. 遍历lLocalKeyFrames 中的关键帧，将它们观测的MapPoints加入到lLocalMapPoints
+        // Local MapPoints seen in Local KeyFrames
+        // 步骤3：遍历lLocalKeyFrames中关键帧，将它们观测的MapPoints加入到lLocalMapPoints
         list<MapPoint *> lLocalMapPoints;
         for (list<KeyFrame *>::iterator lit = lLocalKeyFrames.begin(), lend = lLocalKeyFrames.end(); lit != lend; lit++)
         {
@@ -378,16 +379,17 @@ namespace Goudan_SLAM
                 if (pMP)
                 {
                     if (!pMP->isBad())
-                        if (pMP->mnBALocalForKF != pKF->mnID)
+                        if (pMP->mnBALocalForKF != pKF->mnId)
                         {
                             lLocalMapPoints.push_back(pMP);
-                            pMP->mnBALocalForKF = pKF->mnID; // 防止重复添加
+                            pMP->mnBALocalForKF = pKF->mnId; // 防止重复添加
                         }
                 }
             }
         }
 
-        // 4. 得到能被局部MapPoints观测到，但不属于局部关键帧的关键帧， 这些关键帧在局部BA优化时不优化
+        // Fixed Keyframes. Keyframes that see Local MapPoints but that are not Local Keyframes
+        // 步骤4：得到能被局部MapPoints观测到，但不属于局部关键帧的关键帧，这些关键帧在局部BA优化时不优化
         list<KeyFrame *> lFixedCameras;
         for (list<MapPoint *>::iterator lit = lLocalMapPoints.begin(), lend = lLocalMapPoints.end(); lit != lend; lit++)
         {
@@ -398,18 +400,20 @@ namespace Goudan_SLAM
 
                 // pKFi->mnBALocalForKF!=pKF->mnId表示局部关键帧，
                 // 其它的关键帧虽然能观测到，但不属于局部关键帧
-                if (pKFi->mnBALocalForKF != pKF->mnID && pKFi->mnBAFixedForKF != pKF->mnID)
+                if (pKFi->mnBALocalForKF != pKF->mnId && pKFi->mnBAFixedForKF != pKF->mnId)
                 {
-                    pKFi->mnBAFixedForKF = pKF->mnID; // 防止重复添加
+                    pKFi->mnBAFixedForKF = pKF->mnId; // 防止重复添加
                     if (!pKFi->isBad())
                         lFixedCameras.push_back(pKFi);
                 }
             }
         }
 
-        // 5. 构造g2o优化器
+        // Setup optimizer
+        // 步骤5：构造g2o优化器
         g2o::SparseOptimizer optimizer;
         g2o::BlockSolver_6_3::LinearSolverType *linearSolver;
+
         linearSolver = new g2o::LinearSolverEigen<g2o::BlockSolver_6_3::PoseMatrixType>();
 
         g2o::BlockSolver_6_3 *solver_ptr = new g2o::BlockSolver_6_3(linearSolver);
@@ -421,17 +425,19 @@ namespace Goudan_SLAM
             optimizer.setForceStopFlag(pbStopFlag);
 
         unsigned long maxKFid = 0;
+
+        // Set Local KeyFrame vertices
         // 步骤6：添加顶点：Pose of Local KeyFrame
         for (list<KeyFrame *>::iterator lit = lLocalKeyFrames.begin(), lend = lLocalKeyFrames.end(); lit != lend; lit++)
         {
             KeyFrame *pKFi = *lit;
             g2o::VertexSE3Expmap *vSE3 = new g2o::VertexSE3Expmap();
             vSE3->setEstimate(Converter::toSE3Quat(pKFi->GetPose()));
-            vSE3->setId(pKFi->mnID);
-            vSE3->setFixed(pKFi->mnID == 0); // 第一帧位置固定
+            vSE3->setId(pKFi->mnId);
+            vSE3->setFixed(pKFi->mnId == 0); // 第一帧位置固定
             optimizer.addVertex(vSE3);
-            if (pKFi->mnID > maxKFid)
-                maxKFid = pKFi->mnID;
+            if (pKFi->mnId > maxKFid)
+                maxKFid = pKFi->mnId;
         }
 
         // Set Fixed KeyFrame vertices
@@ -441,14 +447,15 @@ namespace Goudan_SLAM
             KeyFrame *pKFi = *lit;
             g2o::VertexSE3Expmap *vSE3 = new g2o::VertexSE3Expmap();
             vSE3->setEstimate(Converter::toSE3Quat(pKFi->GetPose()));
-            vSE3->setId(pKFi->mnID);
+            vSE3->setId(pKFi->mnId);
             vSE3->setFixed(true);
             optimizer.addVertex(vSE3);
-            if (pKFi->mnID > maxKFid)
-                maxKFid = pKFi->mnID;
+            if (pKFi->mnId > maxKFid)
+                maxKFid = pKFi->mnId;
         }
 
-        // 8. 添加3D顶点
+        // Set MapPoint vertices
+        // 步骤7：添加3D顶点
         const int nExpectedSize = (lLocalKeyFrames.size() + lFixedCameras.size()) * lLocalMapPoints.size();
 
         vector<g2o::EdgeSE3ProjectXYZ *> vpEdgesMono;
@@ -475,15 +482,17 @@ namespace Goudan_SLAM
 
             const map<KeyFrame *, size_t> observations = pMP->GetObservations();
 
-            // 9. 对每一对关联的MapPoint和KeyFrame 构建边
+            // Set edges
+            // 步骤8：对每一对关联的MapPoint和KeyFrame构建边
             for (map<KeyFrame *, size_t>::const_iterator mit = observations.begin(), mend = observations.end(); mit != mend; mit++)
             {
                 KeyFrame *pKFi = mit->first;
 
                 if (!pKFi->isBad())
                 {
-
                     const cv::KeyPoint &kpUn = pKFi->mvKeysUn[mit->second];
+
+                    // Monocular observation
 
                     Eigen::Matrix<double, 2, 1> obs;
                     obs << kpUn.pt.x, kpUn.pt.y;
@@ -491,7 +500,7 @@ namespace Goudan_SLAM
                     g2o::EdgeSE3ProjectXYZ *e = new g2o::EdgeSE3ProjectXYZ();
 
                     e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(id)));
-                    e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(pKFi->mnID)));
+                    e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(pKFi->mnId)));
                     e->setMeasurement(obs);
                     const float &invSigma2 = pKFi->mvInvLevelSigma2[kpUn.octave];
                     e->setInformation(Eigen::Matrix2d::Identity() * invSigma2);
@@ -512,13 +521,15 @@ namespace Goudan_SLAM
                 }
             }
         }
+
         if (pbStopFlag)
             if (*pbStopFlag)
                 return;
 
-        // 10. 开始优化
+        // 步骤9：开始优化
         optimizer.initializeOptimization();
         optimizer.optimize(5);
+
         bool bDoMore = true;
 
         if (pbStopFlag)
@@ -528,7 +539,8 @@ namespace Goudan_SLAM
         if (bDoMore)
         {
 
-            // 11. 检测outlier，并设置下次不优化
+            // Check inlier observations
+            // 步骤10：检测outlier，并设置下次不优化
             for (size_t i = 0, iend = vpEdgesMono.size(); i < iend; i++)
             {
                 g2o::EdgeSE3ProjectXYZ *e = vpEdgesMono[i];
@@ -546,6 +558,7 @@ namespace Goudan_SLAM
                 e->setRobustKernel(0); // 不使用核函数
             }
 
+            // Optimize again without the outliers
             // 步骤11：排除误差较大的outlier后再次优化
             optimizer.initializeOptimization(0);
             optimizer.optimize(10);
@@ -554,7 +567,8 @@ namespace Goudan_SLAM
         vector<pair<KeyFrame *, MapPoint *>> vToErase;
         vToErase.reserve(vpEdgesMono.size());
 
-        // 13.在优化后重新计算误差，剔除连接误差比较大的关键帧和MapPoint
+        // Check inlier observations
+        // 步骤12：在优化后重新计算误差，剔除连接误差比较大的关键帧和MapPoint
         for (size_t i = 0, iend = vpEdgesMono.size(); i < iend; i++)
         {
             g2o::EdgeSE3ProjectXYZ *e = vpEdgesMono[i];
@@ -594,7 +608,7 @@ namespace Goudan_SLAM
         for (list<KeyFrame *>::iterator lit = lLocalKeyFrames.begin(), lend = lLocalKeyFrames.end(); lit != lend; lit++)
         {
             KeyFrame *pKF = *lit;
-            g2o::VertexSE3Expmap *vSE3 = static_cast<g2o::VertexSE3Expmap *>(optimizer.vertex(pKF->mnID));
+            g2o::VertexSE3Expmap *vSE3 = static_cast<g2o::VertexSE3Expmap *>(optimizer.vertex(pKF->mnId));
             g2o::SE3Quat SE3quat = vSE3->estimate();
             pKF->SetPose(Converter::toCvMat(SE3quat));
         }

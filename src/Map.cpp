@@ -3,16 +3,62 @@
 
 namespace Goudan_SLAM
 {
-    Map::Map() : mnMaxKFid(0) {}
+    Map::Map() : mnMaxKFid(0)
+    {
+    }
 
+    /**
+     * @brief Insert KeyFrame in the map
+     * @param pKF KeyFrame
+     */
     void Map::AddKeyFrame(KeyFrame *pKF)
     {
         unique_lock<mutex> lock(mMutexMap);
         mspKeyFrames.insert(pKF);
-        if (pKF->mnID > mnMaxKFid)
-            mnMaxKFid = pKF->mnID;
+        if (pKF->mnId > mnMaxKFid)
+            mnMaxKFid = pKF->mnId;
     }
 
+    /**
+     * @brief Insert MapPoint in the map
+     * @param pMP MapPoint
+     */
+    void Map::AddMapPoint(MapPoint *pMP)
+    {
+        unique_lock<mutex> lock(mMutexMap);
+        mspMapPoints.insert(pMP);
+    }
+
+    /**
+     * @brief Erase MapPoint from the map
+     * @param pMP MapPoint
+     */
+    void Map::EraseMapPoint(MapPoint *pMP)
+    {
+        unique_lock<mutex> lock(mMutexMap);
+        mspMapPoints.erase(pMP);
+
+        // TODO: This only erase the pointer.
+        // Delete the MapPoint
+    }
+
+    /**
+     * @brief Erase KeyFrame from the map
+     * @param pKF KeyFrame
+     */
+    void Map::EraseKeyFrame(KeyFrame *pKF)
+    {
+        unique_lock<mutex> lock(mMutexMap);
+        mspKeyFrames.erase(pKF);
+
+        // TODO: This only erase the pointer.
+        // Delete the MapPoint
+    }
+
+    /**
+     * @brief 设置参考MapPoints，将用于DrawMapPoints函数画图
+     * @param vpMPs Local MapPoints
+     */
     void Map::SetReferenceMapPoints(const vector<MapPoint *> &vpMPs)
     {
         unique_lock<mutex> lock(mMutexMap);
@@ -68,30 +114,6 @@ namespace Goudan_SLAM
         mnMaxKFid = 0;
         mvpReferenceMapPoints.clear();
         mvpKeyFrameOrigins.clear();
-    }
-
-    void Map::EraseKeyFrame(KeyFrame *pKF)
-    {
-        unique_lock<mutex> lock(mMutexMap);
-        mspKeyFrames.erase(pKF);
-
-        // TODO: This only erase the pointer.
-        // Delete the MapPoint
-    }
-
-    void Map::AddMapPoint(MapPoint *pMP)
-    {
-        unique_lock<mutex> lock(mMutexMap);
-        mspMapPoints.insert(pMP);
-    }
-
-    void Map::EraseMapPoint(MapPoint *pMP)
-    {
-        unique_lock<mutex> lock(mMutexMap);
-        mspMapPoints.erase(pMP);
-
-        // TODO: This only erase the pointer.
-        // Delete the MapPoint
     }
 
 } // namespace Goudan_SLAM

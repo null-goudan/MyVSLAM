@@ -90,14 +90,14 @@ namespace Goudan_SLAM
 
         static bool lId(KeyFrame* pKF1, KeyFrame* pKF2)
         {
-            return pKF1->mnID<pKF2->mnID;
+            return pKF1->mnId<pKF2->mnId;
         }
 
     public:
         // The following variables are accesed from only 1 thread or never change (no mutex needed).
         // nNextID -> nLastID
         static long unsigned int nNextId;
-        long unsigned int mnID; // 当前的关键帧的ID号
+        long unsigned int mnId; // 当前的关键帧的ID号
         // 每个关键帧由一个普通帧初始化而来， mnFrameId记录该KeyFrame是由哪个Frame初始化的
         const long unsigned int mnFrameId;
 
